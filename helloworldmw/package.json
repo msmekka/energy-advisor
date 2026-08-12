@@ -16,6 +16,10 @@
       {
         "command": "helloworldmw.helloWorld",
         "title": "Recurse F126"
+      },
+      {
+        "command": "hellowworldmw.displayTime",
+        "title": "Recurse Display Time"
       }
     ]
   },
