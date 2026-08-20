@@ -3,7 +3,7 @@ window.addEventListener("error", (e) => console.error("uncaught error:", e.error
 window.addEventListener("unhandledrejection", (e) => console.error("unhandled rejection:", e.reason));
 
 //Global
-const targetFilePath = "./extras/testcode.py";
+const targetFilePath = "./src/testcode.py";
 const src = await fetch(targetFilePath).then(r => r.text());
 const sourceElement = document.getElementById("source");
 const treeElement = document.getElementById("tree");
