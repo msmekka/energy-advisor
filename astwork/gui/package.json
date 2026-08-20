@@ -1,0 +1,14 @@
+{
+  "name": "ast-explorer",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "canvas": "^3.2.3",
+    "tree-sitter-python": "^0.25.0",
+    "web-tree-sitter": "^0.26.12"
+  },
+  "allowScripts": {
+    "tree-sitter-python@0.25.0": true,
+    "canvas@3.2.3": true
+  }
+}
