@@ -3,11 +3,13 @@ window.addEventListener("error", (e) => console.error("uncaught error:", e.error
 window.addEventListener("unhandledrejection", (e) => console.error("unhandled rejection:", e.reason));
 
 //Global
-const targetFilePath = "./src/testcode.py";
-const src = await fetch(targetFilePath).then(r => r.text());
+let src = "";
+let tree;
+let cursor;
 const sourceElement = document.getElementById("source");
 const treeElement = document.getElementById("tree");
-sourceElement.textContent = src;
+const fileInput = document.getElementById("file-input");
+const fileName = document.getElementById("file-name");
 
 /**
  * Initialize Parser, cursor and tree objects for use later. These are wasm
@@ -16,23 +18,14 @@ sourceElement.textContent = src;
  * 
  * @returns {( cursor, tree, parser )}
  */
-async function init() {
+async function initParser() {
     await Parser.init();
     const parser = new Parser();
 
     const PythonLang = await Language.load("./node_modules/tree-sitter-python/tree-sitter-python.wasm");
     parser.setLanguage(PythonLang);
 
-    const tree = parser.parse(src);
-
-    if (tree === null)
-        return;
-
-    const cursor = tree.walk();
-    if (cursor === null)
-        return;
-
-    return {cursor, tree, parser};
+    return parser;
 }
 
 
@@ -113,10 +106,37 @@ function buildAST(cursor, topEl) {
     topEl.appendChild(details);
 }
 
-const {cursor, parser, tree} = await init().catch(err=> console.error(err));
-buildAST(cursor, treeElement);
-treeElement.querySelector("details").open = true;
+/**
+ * 
+ * @param {*} parser 
+ * @returns 
+ */
+function renderAST(parser) {
+    tree?.delete();
+    treeElement.replaceChildren();
+    sourceElement.textContent = src;
 
-cursor.delete();
-//TODO: Re-parse, manage tree/parser memory
+    tree = parser.parse(src);
+    cursor = tree?.walk();
+    if (cursor === null || cursor === undefined) return;
+
+    buildAST(cursor, treeElement);
+    treeElement.querySelector("details")?.setAttribute("open", "");
+}
+
+/**
+ * 
+ */
+const parser = await initParser().catch(err => console.error(err));
+if (parser) {
+    fileInput.addEventListener("change", async () => {
+        const [file] = fileInput.files;
+        if (!file) return;
+
+        src = await file.text();
+        fileName.textContent = file.name;
+        renderAST(parser);
+    });
+}
+
 
