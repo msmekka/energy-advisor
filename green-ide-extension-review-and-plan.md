@@ -1,6 +1,6 @@
 # IDE Extension for Efficiency & Bias Coding Feedback — Review & Learning-Project Outline
 
-*Revised framing: This was the original plan. We are now using [the energy-aware code analysis plan][#energy-aware-code-analysis-plan.md] .*
+*Revised framing: This was the original plan. We are now using [the energy-aware code analysis plan][#./energy-aware-code-analysis-plan.md] plan
 
 ## a) Review of the idea
 
