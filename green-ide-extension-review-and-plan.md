@@ -1,6 +1,6 @@
 # IDE Extension for Efficiency & Bias Coding Feedback — Review & Learning-Project Outline
 
-*Revised framing: this is a personal build to test feasibility and learn the underlying techniques, not a product aimed at the market. Efficiency and bias are treated as two independent modules rather than one merged signal.*
+*Revised framing: This was the original plan. We are now using [the energy-aware code analysis plan][#energy-aware-code-analysis-plan.md] .*
 
 ## a) Review of the idea
 
