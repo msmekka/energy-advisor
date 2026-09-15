@@ -1,7 +1,6 @@
 import { Parser, Language } from "./node_modules/web-tree-sitter/web-tree-sitter.js";
 window.addEventListener("error", (e) => console.error("uncaught error:", e.error));
 window.addEventListener("unhandledrejection", (e) => console.error("unhandled rejection:", e.reason));
-
 //Global
 let src = "";
 let tree;
@@ -10,6 +9,7 @@ const sourceElement = document.getElementById("source");
 const treeElement = document.getElementById("tree");
 const fileInput = document.getElementById("file-input");
 const fileName = document.getElementById("file-name");
+
 
 /**
  * Initialize Parser, cursor and tree objects for use later. These are wasm
@@ -132,7 +132,7 @@ if (parser) {
     fileInput.addEventListener("change", async () => {
         const [file] = fileInput.files;
         if (!file) return;
-
+        
         src = await file.text();
         fileName.textContent = file.name;
         renderAST(parser);

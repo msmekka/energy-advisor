@@ -1,0 +1,14 @@
+{
+  "name": "MWShelly",
+  "id": "shellyplugusg4-e8f60a7e20f0",
+  "mac": "E8F60A7E20F0",
+  "slot": 0,
+  "model": "S4PL-00116US",
+  "gen": 4,
+  "fw_id": "20251021-123843/gc6531a3",
+  "ver": "1.7.99-plugusg4prod1",
+  "app": "PlugUSG4",
+  "auth_en": false,
+  "auth_domain": null,
+  "matter": true
+}

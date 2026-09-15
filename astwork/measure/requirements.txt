@@ -1,0 +1,4 @@
+pyRAPL>=0.2.3
+black>=23.0.0
+pandas>=2.0.0
+pymongo>=4.0.0

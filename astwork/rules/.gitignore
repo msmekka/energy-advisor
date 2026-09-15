@@ -1,2 +1,5 @@
 rules.js*
 src*
+tsanalyzers.py
+*.pem
+measure_code
