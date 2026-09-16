@@ -46,7 +46,7 @@ NOISY_SERVICES=(
   tracker-miner-fs-3
 )
 
-log() { echo "[pin] $*"; }
+log() { echo "[pin $(date '+%Y-%m-%dT%H:%M:%S%z')] $*"; }
 run() {
   # run <description> -- <command...>  — respects DRY_RUN
   local desc="$1"; shift
@@ -77,6 +77,22 @@ write_file() {
   done
   log "warning: failed to write '$value' -> $path after 5 attempts ($desc) — not aborting; check 'cat $path' and its policy siblings by hand"
 }
+read_file() {
+  # read_file <path> — prints the file's contents on stdout, retrying on
+  # transient EBUSY. cpufreq attribute *reads* use the same trylock-on-the-
+  # policy-rwsem mechanism as writes, so a plain `cat` right after an SMT
+  # sibling offline can fail exactly like a write would — and under
+  # set -euo pipefail, an unguarded failure here kills the whole script.
+  local path="$1" attempt out
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    if out="$(cat "$path" 2>/dev/null)"; then
+      printf '%s' "$out"
+      return 0
+    fi
+    sleep 0.3
+  done
+  return 1
+}
 record_orig() {
   # record_orig <line> <description> — appends to STATE_FILE, skipped under DRY_RUN
   local line="$1" desc="$2"
@@ -95,16 +111,36 @@ require_root() {
 }
 
 pin() {
+  local turbo_orig_val smt_orig_val governor_orig_val minfreq_orig_val maxfreq_orig_val base_freq
   [[ "$DRY_RUN" -eq 1 ]] || : > "$STATE_FILE"
+
+  # --- Noisy services (stopped first — thermald etc. actively rewrite
+  # cpufreq policy attributes and will contend with the writes below if
+  # they're still running when we get to them) ---
+  [[ "$DRY_RUN" -eq 1 ]] || : > "$SERVICES_FILE"
+  for svc in "${NOISY_SERVICES[@]}"; do
+    if systemctl is-active --quiet "$svc" 2>/dev/null; then
+      if [[ "$DRY_RUN" -eq 1 ]]; then
+        log "(dry-run) would stop: $svc"
+      else
+        echo "$svc" >> "$SERVICES_FILE"
+        systemctl stop "$svc" 2>/dev/null && log "stopped $svc"
+      fi
+    fi
+  done
 
   # --- Turbo ---
   if [[ -f /sys/devices/system/cpu/intel_pstate/no_turbo ]]; then
+    turbo_orig_val="$(read_file /sys/devices/system/cpu/intel_pstate/no_turbo)" || {
+      echo "error: could not read current turbo state after retries — aborting before any writes" >&2; exit 1; }
     record_orig "turbo_path=/sys/devices/system/cpu/intel_pstate/no_turbo" "turbo_path"
-    record_orig "turbo_orig=$(cat /sys/devices/system/cpu/intel_pstate/no_turbo)" "turbo_orig"
+    record_orig "turbo_orig=$turbo_orig_val" "turbo_orig"
     write_file /sys/devices/system/cpu/intel_pstate/no_turbo 1 "turbo disabled (intel_pstate)"
   elif [[ -f /sys/devices/system/cpu/cpufreq/boost ]]; then
+    turbo_orig_val="$(read_file /sys/devices/system/cpu/cpufreq/boost)" || {
+      echo "error: could not read current boost state after retries — aborting before any writes" >&2; exit 1; }
     record_orig "turbo_path=/sys/devices/system/cpu/cpufreq/boost" "turbo_path"
-    record_orig "turbo_orig=$(cat /sys/devices/system/cpu/cpufreq/boost)" "turbo_orig"
+    record_orig "turbo_orig=$turbo_orig_val" "turbo_orig"
     write_file /sys/devices/system/cpu/cpufreq/boost 0 "turbo/boost disabled (generic cpufreq)"
   else
     log "warning: no turbo control found (checked intel_pstate/cpufreq boost) — skipping"
@@ -112,7 +148,9 @@ pin() {
 
   # --- SMT ---
   if [[ -f /sys/devices/system/cpu/smt/control ]]; then
-    record_orig "smt_orig=$(cat /sys/devices/system/cpu/smt/control)" "smt_orig"
+    smt_orig_val="$(read_file /sys/devices/system/cpu/smt/control)" || {
+      echo "error: could not read current SMT state after retries — aborting before any writes" >&2; exit 1; }
+    record_orig "smt_orig=$smt_orig_val" "smt_orig"
     write_file /sys/devices/system/cpu/smt/control off "SMT disabled"
     if [[ "$DRY_RUN" -eq 0 ]]; then
       log "settling 2s for sibling-offline cpufreq policy rebuild"
@@ -128,35 +166,32 @@ pin() {
     [[ -f "$cpu/cpufreq/scaling_governor" ]] || continue
 
     if [[ "$governor_saved" -eq 0 ]]; then
-      record_orig "governor_orig=$(cat "$cpu/cpufreq/scaling_governor")" "governor_orig"
-      record_orig "minfreq_orig=$(cat "$cpu/cpufreq/scaling_min_freq")" "minfreq_orig"
-      record_orig "maxfreq_orig=$(cat "$cpu/cpufreq/scaling_max_freq")" "maxfreq_orig"
+      governor_orig_val="$(read_file "$cpu/cpufreq/scaling_governor")" || {
+        echo "error: could not read current governor for $cpu after retries — aborting before any writes" >&2; exit 1; }
+      minfreq_orig_val="$(read_file "$cpu/cpufreq/scaling_min_freq")" || {
+        echo "error: could not read current min_freq for $cpu after retries — aborting before any writes" >&2; exit 1; }
+      maxfreq_orig_val="$(read_file "$cpu/cpufreq/scaling_max_freq")" || {
+        echo "error: could not read current max_freq for $cpu after retries — aborting before any writes" >&2; exit 1; }
+      record_orig "governor_orig=$governor_orig_val" "governor_orig"
+      record_orig "minfreq_orig=$minfreq_orig_val" "minfreq_orig"
+      record_orig "maxfreq_orig=$maxfreq_orig_val" "maxfreq_orig"
       governor_saved=1
     fi
 
     if [[ -f "$cpu/cpufreq/base_frequency" ]]; then
-      base_freq="$(cat "$cpu/cpufreq/base_frequency")"
-      write_file "$cpu/cpufreq/scaling_governor" performance "$cpu governor=performance"
-      # max first, then min — writing min before max can be rejected if the
-      # new min would exceed the *current* max.
-      write_file "$cpu/cpufreq/scaling_max_freq" "$base_freq" "$cpu max_freq -> $base_freq (base clock)"
-      write_file "$cpu/cpufreq/scaling_min_freq" "$base_freq" "$cpu min_freq -> $base_freq (base clock)"
+      if base_freq="$(read_file "$cpu/cpufreq/base_frequency")"; then
+        write_file "$cpu/cpufreq/scaling_governor" performance "$cpu governor=performance"
+        # max first, then min — writing min before max can be rejected if the
+        # new min would exceed the *current* max.
+        write_file "$cpu/cpufreq/scaling_max_freq" "$base_freq" "$cpu max_freq -> $base_freq (base clock)"
+        write_file "$cpu/cpufreq/scaling_min_freq" "$base_freq" "$cpu min_freq -> $base_freq (base clock)"
+      else
+        write_file "$cpu/cpufreq/scaling_governor" performance "$cpu governor=performance"
+        log "warning: $cpu base_frequency unreadable after retries (busy) — performance governor only, frequency not hard-locked for this cpu"
+      fi
     else
       write_file "$cpu/cpufreq/scaling_governor" performance "$cpu governor=performance"
       log "warning: $cpu has no base_frequency file — turbo-disable + performance governor only, frequency not hard-locked. Verify with 'cat $cpu/cpufreq/scaling_cur_freq' under load."
-    fi
-  done
-
-  # --- Noisy services ---
-  [[ "$DRY_RUN" -eq 1 ]] || : > "$SERVICES_FILE"
-  for svc in "${NOISY_SERVICES[@]}"; do
-    if systemctl is-active --quiet "$svc" 2>/dev/null; then
-      if [[ "$DRY_RUN" -eq 1 ]]; then
-        log "(dry-run) would stop: $svc"
-      else
-        echo "$svc" >> "$SERVICES_FILE"
-        systemctl stop "$svc" 2>/dev/null && log "stopped $svc"
-      fi
     fi
   done
 
@@ -175,72 +210,7 @@ capture_baseline() {
   mkdir -p "$BASELINE_DIR"
   local out="$BASELINE_DIR/idle_baseline_$(date +%Y%m%dT%H%M%S).json"
   log "capturing ${SAMPLE_SECONDS}s idle RAPL baseline -> $out"
-  python3 - "$SAMPLE_SECONDS" "$out" <<'PY'
-import sys, os, time, json
-
-# Read /sys/class/powercap/intel-rapl* directly instead of pyRAPL: pyRAPL's
-# DeviceAPIFactory only builds PkgAPI/DramAPI, and _get_socket_directory_names
-# filters top-level zones to ones whose name contains "package" — so a
-# sibling "psys" zone is skipped, and there's no CoreAPI/UncoreAPI at all.
-# Walking sysfs ourselves picks up whatever domains this rig actually has
-# (dram, psys, core, uncore, package-0, ...).
-
-RAPL_ROOT = "/sys/class/powercap"
-seconds = float(sys.argv[1])
-out_path = sys.argv[2]
-
-
-def discover_domains():
-    domains = {}
-    for root, _dirs, files in os.walk(RAPL_ROOT):
-        if "energy_uj" not in files or "name" not in files:
-            continue
-        with open(os.path.join(root, "name")) as f:
-            name = f.read().strip()
-        max_range = None
-        max_range_path = os.path.join(root, "max_energy_range_uj")
-        if os.path.exists(max_range_path):
-            with open(max_range_path) as f:
-                max_range = int(f.read().strip())
-        key = name
-        n = 1
-        while key in domains:
-            n += 1
-            key = f"{name}-{n}"
-        domains[key] = {"path": root, "max_range_uj": max_range}
-    return domains
-
-
-def read_uj(path):
-    with open(os.path.join(path, "energy_uj")) as f:
-        return int(f.read().strip())
-
-
-domains = discover_domains()
-if not domains:
-    print(f"no RAPL domains found under {RAPL_ROOT}", file=sys.stderr)
-    sys.exit(1)
-
-start = {k: read_uj(v["path"]) for k, v in domains.items()}
-time.sleep(seconds)
-end = {k: read_uj(v["path"]) for k, v in domains.items()}
-
-energy_uj = {}
-for k, v in domains.items():
-    delta = end[k] - start[k]
-    if delta < 0 and v["max_range_uj"]:  # 32-bit counter wraparound
-        delta += v["max_range_uj"]
-    energy_uj[k] = delta
-
-record = {
-    "duration_s": seconds,
-    "energy_uj": energy_uj,
-    "avg_power_w": {k: (uj / 1e6) / seconds for k, uj in energy_uj.items()},
-}
-with open(out_path, "w") as f:
-    json.dump(record, f, indent=2)
-print(json.dumps(record, indent=2))
-PY
+  python3 "$SCRIPT_DIR/rapl.py" --seconds "$SAMPLE_SECONDS" --out "$out"
   log "baseline written to $out — subtract avg_power_w[domain] * snippet_duration_s from each snippet's energy_uj[domain]"
 }
 
