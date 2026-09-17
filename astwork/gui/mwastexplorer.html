@@ -67,9 +67,18 @@
 </head>
 <body>
   <div id="toolbar">
-    <label for="file-input">Python source:</label>
-    <input id="file-input" type="file" accept=".py,text/x-python,text/plain">
+    <label for="file-input">Source file:</label>
+    <input id="file-input" type="file" accept=".py,.js,.mjs,.cjs,.jsx,.ts,.tsx,.go,.rs,text/plain">
     <span id="file-name">Choose a file to explore</span>
+    <label for="language-select">Language:</label>
+    <select id="language-select">
+      <option value="py">Python</option>
+      <option value="js">JavaScript</option>
+      <option value="ts">TypeScript</option>
+      <option value="tsx">TSX</option>
+      <option value="go">Go</option>
+      <option value="rs">Rust</option>
+    </select>
   </div>
   <main id="workspace">
     <pre id="source"></pre>

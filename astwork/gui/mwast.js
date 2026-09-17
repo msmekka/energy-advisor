@@ -9,21 +9,48 @@ const sourceElement = document.getElementById("source");
 const treeElement = document.getElementById("tree");
 const fileInput = document.getElementById("file-input");
 const fileName = document.getElementById("file-name");
+const languageSelect = document.getElementById("language-select");
 
+// Keys match the <option value> list in #language-select.
+const WASM_BY_LANGUAGE = {
+    py: "./node_modules/tree-sitter-python/tree-sitter-python.wasm",
+    js: "./node_modules/tree-sitter-javascript/tree-sitter-javascript.wasm",
+    ts: "./node_modules/tree-sitter-typescript/tree-sitter-typescript.wasm",
+    tsx: "./node_modules/tree-sitter-typescript/tree-sitter-tsx.wasm",
+    go: "./node_modules/tree-sitter-go/tree-sitter-go.wasm",
+    rs: "./node_modules/tree-sitter-rust/tree-sitter-rust.wasm",
+};
+const LANGUAGE_BY_EXT = {
+    py: "py",
+    js: "js", mjs: "js", cjs: "js", jsx: "js",
+    ts: "ts",
+    tsx: "tsx",
+    go: "go",
+    rs: "rs",
+};
+const MAX_FILE_BYTES = 1_000_000; // 1MB — each byte can become a DOM node, so keep this small.
+let languages;
+
+function extOf(filename) {
+    return filename.slice(filename.lastIndexOf(".") + 1).toLowerCase();
+}
 
 /**
- * Initialize Parser, cursor and tree objects for use later. These are wasm
+ * Initialize Parser and load every supported grammar. These are wasm
  * objects that will not be garbage collected by js. Anything created here
  * will need it's own garbage collection
- * 
- * @returns {( cursor, tree, parser )}
+ *
+ * @returns {Parser}
  */
 async function initParser() {
     await Parser.init();
     const parser = new Parser();
 
-    const PythonLang = await Language.load("./node_modules/tree-sitter-python/tree-sitter-python.wasm");
-    parser.setLanguage(PythonLang);
+    languages = new Map();
+    for (const [lang, wasmPath] of Object.entries(WASM_BY_LANGUAGE)) {
+        languages.set(lang, await Language.load(wasmPath));
+    }
+    parser.setLanguage(languages.get(languageSelect.value));
 
     return parser;
 }
@@ -132,9 +159,25 @@ if (parser) {
     fileInput.addEventListener("change", async () => {
         const [file] = fileInput.files;
         if (!file) return;
-        
+
+        if (file.size > MAX_FILE_BYTES) {
+            fileInput.value = "";
+            fileName.textContent = `"${file.name}" is ${(file.size / 1e6).toFixed(1)}MB, over the ${MAX_FILE_BYTES / 1e6}MB limit`;
+            return;
+        }
+
+        const guessed = LANGUAGE_BY_EXT[extOf(file.name)];
+        if (guessed) languageSelect.value = guessed;
+
         src = await file.text();
         fileName.textContent = file.name;
+        parser.setLanguage(languages.get(languageSelect.value));
+        renderAST(parser);
+    });
+
+    languageSelect.addEventListener("change", () => {
+        if (!src) return;
+        parser.setLanguage(languages.get(languageSelect.value));
         renderAST(parser);
     });
 }
