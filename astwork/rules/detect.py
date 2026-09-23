@@ -1,5 +1,5 @@
 import tree_sitter_python as tspython
-from tree_sitter import Language, Parser, Query, QueryCursor
+from tree_sitter import Language, Parser, Query, QueryCursor, QueryError
 import ast
 import os
 from astanalyzers import ForLoopAnalyzer, IfAnalyzer, BusyWaitAnalyzer
@@ -28,7 +28,7 @@ rule_types = {
     "untested-boundaries" :
         {"special_hdlr" : None, "counter" : "untested_boundaries"},
     "eager-materialization" :
-        {"special_hdlr" : None, "counter" : "eager-materialization"}
+        {"special_hdlr" : None, "counter" : "eager_materialization"}
     }
 
 
@@ -54,6 +54,8 @@ def get_ts_match_counts(ts_parser, source, rule):
         matches = ts_cursor.matches(ts_tree.root_node)
     except FileNotFoundError:
         print(f"File not found {rule}")
+    except QueryError:
+        print(f"Invalid query, skipping {rule}")
 
     return matches, len(matches)   
 
