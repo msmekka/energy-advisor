@@ -8,7 +8,7 @@ class Violations:
     magic_numbers: int = 0
     untested_boundaries: int = 0
     redundant_iterations: int = 0
-    comprehension_miss: int = 0
+    eager_materialization: int = 0
     polling_loop: int = 0
     busy_wait: int = 0
 

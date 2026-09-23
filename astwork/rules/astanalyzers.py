@@ -1,14 +1,32 @@
 import ast
 from  datetime import date, datetime
 from pathlib import Path
-from shared_state import violations_tracker
+from shared_state import Violations, violations_tracker
         
+
+def has_sleep_call(node):
+    return any(
+        isinstance(child, ast.Call)
+        and isinstance(child.func, ast.Attribute)
+        and child.func.attr == "sleep"
+        for child in ast.walk(node)
+    )
+
+
+def is_trivial_statement(stmt):
+    """A statement that can't advance the loop toward its exit condition:
+    no assignments, no mutation — only spinning or re-checking something."""
+    if isinstance(stmt, (ast.Pass, ast.Continue)):
+        return True
+    return isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call)
+
 
 def is_no_op_while(node):
     return (
         isinstance(node, ast.While)
-        and len(node.body) == 1
-        and isinstance(node.body[0], (ast.Pass, ast.Continue))
+        and len(node.body) >= 1
+        and all(is_trivial_statement(stmt) for stmt in node.body)
+        and not any(has_sleep_call(stmt) for stmt in node.body)
     )
 
 class BusyWaitAnalyzer(ast.NodeVisitor):
@@ -87,56 +105,17 @@ class ForLoopAnalyzer(ast.NodeVisitor):
             
 
 def main():
-    # --- Test Case ---
-    source_code = """
-    for i in range(100):
-        x = 10 * 5          # Redundant (Invariant computation)
-        y = array[i] + 2    # Valid (Changes with 'i')
-        for j in range(1,10):
-            print("Another redundant iteration")
-        print("Looping...") # Redundant iteration output
-    """
 
-    source_code_for = """
-    somelist =[1,2,3,4,5,6]
-    newlist = []
-    for somenum in somelist:
-        if somenum >= 10:
-            newlist.append(somenum)
-    """
-    #array = [x for x in range(1,101)]
-    #before = datetime.now()
-    #for i in range(100):
-    #    x = 10 * 5          # Redundant (Invariant computation)
-    #    y = array[i] + 2    # Valid (Changes with 'i')
-    #    for j in range(1,10):
-    #        z = y + 5
-    #    print("Looping...") # Redundant iteration output
-    #after = datetime.now()
-    #print(f"Execution: {after - before}")
-    ############################################
-
-    violations_tracker = violations("snippet")
-
+    lvt = Violations("snippet")
+    user_input = ("Enter filepath of source code to be analyzed: ")
+    filepath = user_input
+    with open(filepath, "rb") as f:
+        source_code = f.read()
     tree = ast.parse(source_code)
     #print(ast.dump(tree))
     detector = ForLoopAnalyzer()
-    detector.visit(tree, violations_tracker)
-    print(violations_tracker)
-
-    # targetfilepath = Path("./src/ageism_test_code.py")
-    # if targetfilepath.exists(): 
-    #     with open(targetfilepath, "r", encoding = "utf-8") as f:
-    #         source = f.read()
-    #         tree = ast.parse(source)
-    #         #print(ast.dump(tree))
-    #         ridetector = RedundantIterationDetector()
-    #         ridetector.visit(tree)
-    #         ifdetector = IfAnalyzer()
-    #         ifdetector.visit(tree)
-    #         print(f"Bias score: untested boundary violations: {violations_tracker.untested_boundaries}, magic number violations: {violations_tracker.magic_numbers}")
-    #         print(f"unbalanced score: {violations_tracker.if_count - violations_tracker.else_count}")
-    #         f.close()
+    detector.visit(tree, lvt)
+    print(lvt)
 
 if __name__ == "__main__":
     main()
