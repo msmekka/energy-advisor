@@ -74,14 +74,22 @@ def read_uj(path):
     with open(os.path.join(path, "energy_uj")) as f:
         return int(f.read().strip())
 
+def get_measurements(seconds, domains):
+    
 
-def sample(seconds, domains=None):
+def start(filepath):
+    NotImplemented
+
+def stop(process):
+    NotImplemented
+
+
+def sample(seconds, domains):
     """Sample every RAPL domain for `seconds`, wall-clock via monotonic clock.
 
     Returns {"duration_s", "energy_uj": {domain: uj}, "avg_power_w": {domain: w}}.
     32-bit counter wraparound is corrected per-domain via max_energy_range_uj.
     """
-    domains = domains or discover_domains()
     if not domains:
         raise RuntimeError(f"no RAPL domains found under {RAPL_ROOT}")
 
@@ -111,7 +119,9 @@ def main():
     parser.add_argument("--out", default=None)
     args = parser.parse_args()
 
-    record = sample(args.seconds)
+    domains = discover_domains()
+    get_measurements()
+    record = sample(args.seconds, domains.sorted())
     print(json.dumps(record, indent=2))
     if args.out:
         with open(args.out, "w") as f:

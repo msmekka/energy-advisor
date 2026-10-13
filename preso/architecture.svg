@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 820" role="img" aria-label="Three-tier pipeline: a tree-sitter shape check runs continuously on every file, an optional Cachegrind confirmation runs on demand, and an offline RAPL and wall-meter calibration runs rarely on a dedicated rig. All three feed a Finding that is tagged with its source tier, emitted as JSON Lines or SARIF, and consumed by either a human in an editor or a code-generating agent.">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1B2430"/>
+    </marker>
+    <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5B6472"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="820" fill="#FAFAF8"/>
+
+  <g font-family="'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace">
+
+    <!-- Tier 1 -->
+    <rect x="40" y="40" width="340" height="170" rx="6" fill="#E4EEF2" stroke="#2E6F8E" stroke-width="2"/>
+    <text x="60" y="72" font-size="15" font-weight="600" fill="#1B2430">Tier 1 &#183; Static Shape</text>
+    <text x="60" y="96" font-size="12.5" fill="#5B6472">tree-sitter query</text>
+    <text x="60" y="120" font-size="12.5" fill="#5B6472">continuous &#183; milliseconds</text>
+    <text x="60" y="144" font-size="12.5" fill="#5B6472">runs anywhere &#8212; VM-safe</text>
+    <text x="60" y="168" font-size="12" font-style="italic" fill="#2E6F8E">shape only, no magnitude</text>
+
+    <!-- Tier 2 (not built — reserved slot) -->
+    <rect x="430" y="40" width="340" height="170" rx="6" fill="none" stroke="#5B6472" stroke-width="1.5" stroke-dasharray="5 5"/>
+    <text x="450" y="72" font-size="15" font-weight="600" fill="#5B6472">Tier 2 &#183; Confirm</text>
+    <text x="450" y="96" font-size="12.5" fill="#5B6472">Cachegrind counts</text>
+    <text x="450" y="120" font-size="12.5" fill="#5B6472">on demand &#183; per selection</text>
+    <text x="450" y="144" font-size="12.5" fill="#5B6472">runs anywhere &#8212; simulator</text>
+    <text x="450" y="168" font-size="12" font-style="italic" fill="#5B6472">planned &#8212; not built yet</text>
+
+    <!-- Tier 3 -->
+    <rect x="820" y="40" width="340" height="170" rx="6" fill="#F7E7DE" stroke="#C1562C" stroke-width="2"/>
+    <text x="840" y="72" font-size="15" font-weight="600" fill="#1B2430">Tier 3 &#183; Calibrate</text>
+    <text x="840" y="96" font-size="12.5" fill="#5B6472">RAPL + wall meter</text>
+    <text x="840" y="120" font-size="12.5" fill="#5B6472">offline &#183; occasional</text>
+    <text x="840" y="144" font-size="12.5" fill="#5B6472">bare metal only</text>
+    <text x="840" y="168" font-size="12" font-style="italic" fill="#C1562C">real joules, real hardware</text>
+
+    <!-- Arrows: tiers -> Finding -->
+    <polyline points="210,210 210,260 500,260 500,340" fill="none" stroke="#1B2430" stroke-width="1.75" marker-end="url(#arrow)"/>
+    <text x="330" y="250" font-size="12" fill="#5B6472" text-anchor="middle">shape + location</text>
+
+    <polyline points="600,210 600,340" fill="none" stroke="#5B6472" stroke-width="1.25" stroke-dasharray="3 5" opacity="0.6" marker-end="url(#arrow-muted)"/>
+    <text x="615" y="272" font-size="12" fill="#5B6472" opacity="0.7">reserved slot</text>
+    <text x="615" y="288" font-size="12" fill="#5B6472" opacity="0.7">(not wired up)</text>
+
+    <polyline points="990,210 990,260 700,260 700,340" fill="none" stroke="#1B2430" stroke-width="1.75" stroke-dasharray="6 4" marker-end="url(#arrow)"/>
+    <text x="870" y="250" font-size="12" fill="#5B6472" text-anchor="middle">ratio (if measured)</text>
+
+    <!-- Finding -->
+    <rect x="450" y="340" width="300" height="150" rx="8" fill="#FFFFFF" stroke="#D8D4CB" stroke-width="1.5"/>
+    <text x="470" y="372" font-size="16" font-weight="700" fill="#1B2430">Finding</text>
+    <text x="470" y="398" font-size="13" fill="#5B6472">shape + location</text>
+    <text x="470" y="420" font-size="13" fill="#5B6472" opacity="0.55">+ confirmed counts (planned)</text>
+    <text x="470" y="442" font-size="13" fill="#5B6472">+ measured ratio (if available)</text>
+    <text x="470" y="468" font-size="13" font-weight="600" fill="#1B2430">tagged with its source tier</text>
+
+    <!-- Finding -> CLI -->
+    <line x1="600" y1="490" x2="600" y2="540" stroke="#1B2430" stroke-width="1.75" marker-end="url(#arrow)"/>
+
+    <!-- CLI Output -->
+    <rect x="420" y="540" width="360" height="80" rx="8" fill="#FFFFFF" stroke="#D8D4CB" stroke-width="1.5"/>
+    <text x="600" y="572" font-size="15" font-weight="700" fill="#1B2430" text-anchor="middle">CLI Output</text>
+    <text x="600" y="596" font-size="13" fill="#5B6472" text-anchor="middle">JSON Lines &#183; SARIF</text>
+
+    <!-- CLI -> consumers -->
+    <line x1="600" y1="620" x2="290" y2="690" stroke="#1B2430" stroke-width="1.75" marker-end="url(#arrow)"/>
+    <text x="420" y="655" font-size="12" fill="#5B6472" text-anchor="middle">for a developer</text>
+
+    <line x1="600" y1="620" x2="910" y2="690" stroke="#1B2430" stroke-width="1.75" marker-end="url(#arrow)"/>
+    <text x="780" y="655" font-size="12" fill="#5B6472" text-anchor="middle">for a generating agent</text>
+
+    <!-- Human -->
+    <rect x="150" y="690" width="280" height="90" rx="8" fill="#FFFFFF" stroke="#D8D4CB" stroke-width="1.5"/>
+    <text x="290" y="725" font-size="15" font-weight="700" fill="#1B2430" text-anchor="middle">Human</text>
+    <text x="290" y="748" font-size="13" fill="#5B6472" text-anchor="middle">reads it in the editor</text>
+
+    <!-- Agent -->
+    <rect x="770" y="690" width="280" height="90" rx="8" fill="#FFFFFF" stroke="#D8D4CB" stroke-width="1.5"/>
+    <text x="910" y="725" font-size="15" font-weight="700" fill="#1B2430" text-anchor="middle">Agent</text>
+    <text x="910" y="748" font-size="13" fill="#5B6472" text-anchor="middle">via MCP or a CLI pipe</text>
+
+  </g>
+</svg>

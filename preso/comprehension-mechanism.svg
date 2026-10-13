@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1150 540" role="img" aria-label="Two paths from the same source to the same sum. The top path computes each value, writes all of them into memory, then reads the whole stored collection back one at a time. The bottom path computes one value, hands it to sum immediately, discards it, and repeats — never holding more than one value at once.">
+  <defs>
+    <marker id="arrowA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1B2430"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1150" height="540" fill="#FAFAF8"/>
+
+  <g font-family="'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace">
+
+    <!-- Shared source -->
+    <rect x="30" y="240" width="140" height="80" rx="8" fill="#FFFFFF" stroke="#D8D4CB" stroke-width="1.5"/>
+    <text x="100" y="274" font-size="14" font-weight="700" fill="#1B2430" text-anchor="middle">range(N)</text>
+    <text x="100" y="296" font-size="11" fill="#5B6472" text-anchor="middle">one value at a time</text>
+
+    <!-- Fork -->
+    <line x1="170" y1="262" x2="200" y2="95" stroke="#1B2430" stroke-width="1.5" marker-end="url(#arrowA)"/>
+    <line x1="170" y1="298" x2="200" y2="415" stroke="#1B2430" stroke-width="1.5" marker-end="url(#arrowA)"/>
+
+    <!-- TOP LANE: materialize -->
+    <rect x="200" y="60" width="170" height="70" rx="8" fill="#F3E7EF" stroke="#8E3B6B" stroke-width="2"/>
+    <text x="285" y="90" font-size="13" font-weight="600" fill="#1B2430" text-anchor="middle">compute x&#183;x</text>
+    <text x="285" y="109" font-size="11" fill="#5B6472" text-anchor="middle">same work either way</text>
+
+    <line x1="370" y1="95" x2="420" y2="95" stroke="#8E3B6B" stroke-width="1.75" marker-end="url(#arrowA)"/>
+    <text x="395" y="80" font-size="11" fill="#5B6472" text-anchor="middle">write</text>
+
+    <rect x="420" y="45" width="300" height="110" rx="6" fill="none" stroke="#8E3B6B" stroke-width="1.5" stroke-dasharray="5 5"/>
+    <g fill="#8E3B6B">
+      <rect x="508" y="82" width="14" height="14"/>
+      <rect x="530" y="82" width="14" height="14"/>
+      <rect x="552" y="82" width="14" height="14"/>
+      <rect x="574" y="82" width="14" height="14"/>
+      <rect x="596" y="82" width="14" height="14"/>
+      <rect x="618" y="82" width="14" height="14"/>
+      <rect x="508" y="104" width="14" height="14"/>
+      <rect x="530" y="104" width="14" height="14"/>
+      <rect x="552" y="104" width="14" height="14"/>
+      <rect x="574" y="104" width="14" height="14"/>
+      <rect x="596" y="104" width="14" height="14"/>
+      <rect x="618" y="104" width="14" height="14"/>
+    </g>
+    <text x="570" y="178" font-size="11.5" font-style="italic" fill="#8E3B6B" text-anchor="middle">every value held in memory at once</text>
+
+    <line x1="720" y1="95" x2="980" y2="255" stroke="#8E3B6B" stroke-width="1.75" marker-end="url(#arrowA)"/>
+    <text x="850" y="158" font-size="11" fill="#5B6472" text-anchor="middle">read back, one at a time</text>
+
+    <!-- BOTTOM LANE: stream -->
+    <rect x="200" y="380" width="170" height="70" rx="8" fill="#E4EEF2" stroke="#2E6F8E" stroke-width="2"/>
+    <text x="285" y="410" font-size="13" font-weight="600" fill="#1B2430" text-anchor="middle">compute x&#183;x</text>
+    <text x="285" y="429" font-size="11" fill="#5B6472" text-anchor="middle">same work either way</text>
+
+    <line x1="370" y1="415" x2="420" y2="415" stroke="#2E6F8E" stroke-width="1.75" marker-end="url(#arrowA)"/>
+    <text x="395" y="400" font-size="11" fill="#5B6472" text-anchor="middle">hand off</text>
+
+    <rect x="420" y="400" width="30" height="30" fill="#2E6F8E"/>
+
+    <path d="M 435 400 Q 360 345 285 380" fill="none" stroke="#2E6F8E" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrowA)"/>
+    <text x="360" y="330" font-size="11" fill="#5B6472" text-anchor="middle">discard, compute next</text>
+
+    <line x1="450" y1="415" x2="980" y2="305" stroke="#2E6F8E" stroke-width="1.75" marker-end="url(#arrowA)"/>
+    <text x="715" y="382" font-size="11" fill="#5B6472" text-anchor="middle">used immediately</text>
+
+    <text x="400" y="470" font-size="11.5" font-style="italic" fill="#2E6F8E" text-anchor="middle">never more than</text>
+    <text x="400" y="487" font-size="11.5" font-style="italic" fill="#2E6F8E" text-anchor="middle">one value at once</text>
+
+    <!-- Shared destination -->
+    <rect x="980" y="240" width="150" height="80" rx="8" fill="#FFFFFF" stroke="#D8D4CB" stroke-width="1.5"/>
+    <text x="1055" y="274" font-size="14" font-weight="700" fill="#1B2430" text-anchor="middle">sum()</text>
+    <text x="1055" y="296" font-size="11" fill="#5B6472" text-anchor="middle">same total, either way</text>
+
+  </g>
+</svg>

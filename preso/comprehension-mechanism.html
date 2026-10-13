@@ -1,0 +1,179 @@
+<title>Comprehension vs Generator</title>
+<style>
+  :root {
+    --page-bg: #FAFAF8;
+    --ink: #1B2430;
+    --muted: #5B6472;
+    --card-bg: #FFFFFF;
+    --card-border: #D8D4CB;
+    --warm: #8E3B6B;
+    --warm-tint: #F3E7EF;
+    --cool: #2E6F8E;
+    --cool-tint: #E4EEF2;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --page-bg: #14171B;
+      --ink: #E8E6E1;
+      --muted: #9AA3AF;
+      --card-bg: #1C1F24;
+      --card-border: #343A42;
+      --warm: #D98FC0;
+      --warm-tint: #3A1F30;
+      --cool: #6CB7D6;
+      --cool-tint: #1C2E36;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --page-bg: #14171B;
+    --ink: #E8E6E1;
+    --muted: #9AA3AF;
+    --card-bg: #1C1F24;
+    --card-border: #343A42;
+    --warm: #D98FC0;
+    --warm-tint: #3A1F30;
+    --cool: #6CB7D6;
+    --cool-tint: #1C2E36;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--page-bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 3rem 1.5rem 4rem;
+    min-height: 100%;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--warm);
+  }
+
+  h1 {
+    font-size: clamp(1.3rem, 2.4vw, 1.8rem);
+    font-weight: 600;
+    margin: 0;
+    text-wrap: balance;
+    text-align: center;
+    max-width: 38ch;
+  }
+
+  figure {
+    margin: 0;
+    width: min(1080px, 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .diagram-frame { width: 100%; overflow-x: auto; }
+
+  svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+
+  figcaption {
+    max-width: 58ch;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  figcaption strong { color: var(--ink); }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+
+<div class="eyebrow">eager-materialization &middot; mechanism</div>
+<h1>Same source, same answer &mdash; only the path between them differs</h1>
+
+<figure>
+  <div class="diagram-frame">
+    <svg viewBox="0 0 1150 540" role="img" aria-label="Two paths from the same source to the same sum. The top path computes each value, writes all of them into memory, then reads the whole stored collection back one at a time. The bottom path computes one value, hands it to sum immediately, discards it, and repeats — never holding more than one value at once.">
+      <defs>
+        <marker id="arrowA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"></path>
+        </marker>
+      </defs>
+
+      <g font-family="'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace">
+
+        <!-- Shared source -->
+        <rect x="30" y="240" width="140" height="80" rx="8" fill="var(--card-bg)" stroke="var(--card-border)" stroke-width="1.5"></rect>
+        <text x="100" y="274" font-size="14" font-weight="700" fill="var(--ink)" text-anchor="middle">range(N)</text>
+        <text x="100" y="296" font-size="11" fill="var(--muted)" text-anchor="middle">one value at a time</text>
+
+        <!-- Fork -->
+        <line x1="170" y1="262" x2="200" y2="95" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#arrowA)"></line>
+        <line x1="170" y1="298" x2="200" y2="415" stroke="var(--ink)" stroke-width="1.5" marker-end="url(#arrowA)"></line>
+
+        <!-- TOP LANE: materialize -->
+        <rect x="200" y="60" width="170" height="70" rx="8" fill="var(--warm-tint)" stroke="var(--warm)" stroke-width="2"></rect>
+        <text x="285" y="90" font-size="13" font-weight="600" fill="var(--ink)" text-anchor="middle">compute x&#183;x</text>
+        <text x="285" y="109" font-size="11" fill="var(--muted)" text-anchor="middle">same work either way</text>
+
+        <line x1="370" y1="95" x2="420" y2="95" stroke="var(--warm)" stroke-width="1.75" marker-end="url(#arrowA)"></line>
+        <text x="395" y="80" font-size="11" fill="var(--muted)" text-anchor="middle">write</text>
+
+        <rect x="420" y="45" width="300" height="110" rx="6" fill="none" stroke="var(--warm)" stroke-width="1.5" stroke-dasharray="5 5"></rect>
+        <g fill="var(--warm)">
+          <rect x="508" y="82" width="14" height="14"></rect>
+          <rect x="530" y="82" width="14" height="14"></rect>
+          <rect x="552" y="82" width="14" height="14"></rect>
+          <rect x="574" y="82" width="14" height="14"></rect>
+          <rect x="596" y="82" width="14" height="14"></rect>
+          <rect x="618" y="82" width="14" height="14"></rect>
+          <rect x="508" y="104" width="14" height="14"></rect>
+          <rect x="530" y="104" width="14" height="14"></rect>
+          <rect x="552" y="104" width="14" height="14"></rect>
+          <rect x="574" y="104" width="14" height="14"></rect>
+          <rect x="596" y="104" width="14" height="14"></rect>
+          <rect x="618" y="104" width="14" height="14"></rect>
+        </g>
+        <text x="570" y="178" font-size="11.5" font-style="italic" fill="var(--warm)" text-anchor="middle">every value held in memory at once</text>
+
+        <line x1="720" y1="95" x2="980" y2="255" stroke="var(--warm)" stroke-width="1.75" marker-end="url(#arrowA)"></line>
+        <text x="850" y="158" font-size="11" fill="var(--muted)" text-anchor="middle">read back, one at a time</text>
+
+        <!-- BOTTOM LANE: stream -->
+        <rect x="200" y="380" width="170" height="70" rx="8" fill="var(--cool-tint)" stroke="var(--cool)" stroke-width="2"></rect>
+        <text x="285" y="410" font-size="13" font-weight="600" fill="var(--ink)" text-anchor="middle">compute x&#183;x</text>
+        <text x="285" y="429" font-size="11" fill="var(--muted)" text-anchor="middle">same work either way</text>
+
+        <line x1="370" y1="415" x2="420" y2="415" stroke="var(--cool)" stroke-width="1.75" marker-end="url(#arrowA)"></line>
+        <text x="395" y="400" font-size="11" fill="var(--muted)" text-anchor="middle">hand off</text>
+
+        <rect x="420" y="400" width="30" height="30" fill="var(--cool)"></rect>
+
+        <path d="M 435 400 Q 360 345 285 380" fill="none" stroke="var(--cool)" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrowA)"></path>
+        <text x="360" y="330" font-size="11" fill="var(--muted)" text-anchor="middle">discard, compute next</text>
+
+        <line x1="450" y1="415" x2="980" y2="305" stroke="var(--cool)" stroke-width="1.75" marker-end="url(#arrowA)"></line>
+        <text x="715" y="382" font-size="11" fill="var(--muted)" text-anchor="middle">used immediately</text>
+
+        <text x="400" y="470" font-size="11.5" font-style="italic" fill="var(--cool)" text-anchor="middle">never more than</text>
+        <text x="400" y="487" font-size="11.5" font-style="italic" fill="var(--cool)" text-anchor="middle">one value at once</text>
+
+        <!-- Shared destination -->
+        <rect x="980" y="240" width="150" height="80" rx="8" fill="var(--card-bg)" stroke="var(--card-border)" stroke-width="1.5"></rect>
+        <text x="1055" y="274" font-size="14" font-weight="700" fill="var(--ink)" text-anchor="middle">sum()</text>
+        <text x="1055" y="296" font-size="11" fill="var(--muted)" text-anchor="middle">same total, either way</text>
+
+      </g>
+    </svg>
+  </div>
+  <figcaption>A list or set comprehension computes every value and <strong>writes the whole collection into memory</strong> before <code>sum()</code> ever starts reading. A generator computes one value, hands it straight to <code>sum()</code>, and discards it &mdash; it never holds more than one value at a time. Same source, same answer, same amount of arithmetic &mdash; the only difference is whether anything gets stored in between.</figcaption>
+</figure>

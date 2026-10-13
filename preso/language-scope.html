@@ -1,0 +1,133 @@
+<title>Language Scope</title>
+<style>
+  :root {
+    --page-bg: #FAFAF8;
+    --ink: #1B2430;
+    --muted: #5B6472;
+    --card-bg: #FFFFFF;
+    --card-border: #D8D4CB;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --page-bg: #14171B;
+      --ink: #E8E6E1;
+      --muted: #9AA3AF;
+      --card-bg: #1C1F24;
+      --card-border: #343A42;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --page-bg: #14171B;
+    --ink: #E8E6E1;
+    --muted: #9AA3AF;
+    --card-bg: #1C1F24;
+    --card-border: #343A42;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--page-bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 3rem 1.5rem 4rem;
+    min-height: 100%;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  h1 {
+    font-size: clamp(1.3rem, 2.4vw, 1.8rem);
+    font-weight: 600;
+    margin: 0;
+    text-wrap: balance;
+    text-align: center;
+    max-width: 34ch;
+  }
+
+  figure {
+    margin: 0;
+    width: min(820px, 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .diagram-frame { width: 100%; overflow-x: auto; }
+
+  svg { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+
+  figcaption {
+    max-width: 56ch;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  figcaption strong { color: var(--ink); }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+
+<div class="eyebrow">energy-advisor &middot; language scope</div>
+<h1>One engine, one grammar wired up so far</h1>
+
+<figure>
+  <div class="diagram-frame">
+    <svg viewBox="0 0 900 420" role="img" aria-label="One tree-sitter engine with two grammar slots. Python's slot is filled in: the grammar is wired up and energy rules are written against it. The other slot, covering Go, Rust, JavaScript, and TypeScript, already parses in the AST explorer, but no energy rules have been written for it yet.">
+      <defs>
+        <marker id="arrowB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"></path>
+        </marker>
+        <marker id="arrowB-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"></path>
+        </marker>
+      </defs>
+
+      <g font-family="'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace">
+
+        <!-- Python: built -->
+        <rect x="120" y="100" width="260" height="150" rx="8" fill="var(--card-bg)" stroke="var(--ink)" stroke-width="2"></rect>
+        <text x="250" y="138" font-size="17" font-weight="700" fill="var(--ink)" text-anchor="middle">Python</text>
+        <text x="250" y="163" font-size="12" fill="var(--muted)" text-anchor="middle">grammar wired in</text>
+        <text x="250" y="184" font-size="12" fill="var(--muted)" text-anchor="middle">rule.scm queries written</text>
+        <text x="250" y="212" font-size="12" font-style="italic" fill="var(--ink)" text-anchor="middle">this project, today</text>
+
+        <!-- Other languages: ghost slot -->
+        <rect x="520" y="100" width="260" height="150" rx="8" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 5"></rect>
+        <text x="650" y="134" font-size="14" font-weight="600" fill="var(--muted)" text-anchor="middle">Go &middot; Rust</text>
+        <text x="650" y="154" font-size="14" font-weight="600" fill="var(--muted)" text-anchor="middle">JS &middot; TS</text>
+        <text x="650" y="178" font-size="12" fill="var(--muted)" text-anchor="middle">already parses in the AST explorer</text>
+        <text x="650" y="198" font-size="12" fill="var(--muted)" text-anchor="middle">zero energy rules written</text>
+        <text x="650" y="222" font-size="12" font-style="italic" fill="var(--muted)" text-anchor="middle">planned &mdash; not built yet</text>
+
+        <!-- Shared engine -->
+        <rect x="250" y="300" width="400" height="90" rx="8" fill="var(--card-bg)" stroke="var(--card-border)" stroke-width="1.5"></rect>
+        <text x="450" y="338" font-size="15" font-weight="700" fill="var(--ink)" text-anchor="middle">tree-sitter engine</text>
+        <text x="450" y="361" font-size="12" fill="var(--muted)" text-anchor="middle">one parser, swappable grammars</text>
+
+        <!-- Arrows -->
+        <line x1="350" y1="300" x2="250" y2="250" stroke="var(--ink)" stroke-width="1.75" marker-end="url(#arrowB)"></line>
+        <line x1="550" y1="300" x2="650" y2="250" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#arrowB-muted)"></line>
+
+      </g>
+    </svg>
+  </div>
+  <figcaption>Tree-sitter itself isn&rsquo;t Python-specific &mdash; <strong>Python</strong> is the one grammar with real energy rules written against it. The other grammars already parse successfully in the AST explorer; proving the rule set generalizes to them is on the roadmap, not done.</figcaption>
+</figure>

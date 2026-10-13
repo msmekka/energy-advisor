@@ -6,7 +6,7 @@ against the RAPL baseline — never the primary measurement path).
     python3 shelly_check.py sample --seconds 30
     python3 shelly_check.py sample --seconds 30 --out measurements/shelly_20260915.json
 
-Uses the Gen2+ RPC HTTP API (this device is gen 4): GET requests to
+Uses the Gen4+ RPC HTTP API (this device is gen 4): GET requests to
 /rpc/<Method>?param=value, no auth (device info shows auth_en: false).
 Stdlib only — no requests/pandas dependency for a two-endpoint client.
 """
