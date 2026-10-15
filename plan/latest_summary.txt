@@ -1,0 +1,26 @@
+---
+
+Session summary — RAPL/Shelly measurement tooling (energy_advisor project)
+
+Fixed (committed & pushed: 7658fef, e6027fb)
+- measure/rapl.py: discover_domains() was hanging. Its symlink-cycle guard only filtered by name prefix (intel-rapl*), which didn't rule out a symlink loop among the RAPL zones themselves. Fixed by tracking visited realpath()s and refusing to re-enter one.
+- measure/pin_baseline.sh: log() now prefixes every line with an ISO-8601 timestamp, so the long soak/sleep windows show when each step actually happened.
+
+Added
+- measure/shelly/validate_baseline.py: cross-checks a saved idle_baseline_*.json (from pin_baseline.sh) against the Shelly plug's wall power, sampled now (unlike validate_shelly.py, which resamples RAPL live in lockstep with Shelly). Key behaviors:
+  - Auto-picks the newest baseline file by default (filenames are timestamp-sorted); announces which file it picked to stderr before the long sleep so you can bail early.
+  - Default output filename mirrors the baseline's own timestamp (baseline_validate_<ts>.json), not the run time.
+  - Flags the comparison as stale if the baseline is >1hr old — only meaningful while the machine is still in the same pinned/idle state.
+  - Catches Shelly's aenergy.total quantization noise: at low idle power, short windows (~30s) can read a 0 W delta or a wildly inflated one, because the counter's own internal step size dominates the true energy delta. Cross-checks against the instantaneous apower field and flags >2x divergence. Fix in practice: use much longer --seconds (300s+) so real accumulated energy swamps the counter's quantization.
+
+Methodology decisions worth keeping
+- RAPL domain hierarchy on this rig: core/uncore are children of package-0 (sysfs subzones), not separate rails — never sum them on top of package-0. dram is a genuinely separate physical rail (memory controller/DIMMs).
+- psys (meant to be the platform-wide umbrella including package+dram+more) measured lower than package-0 + dram combined on this rig — inconsistent/untrustworthy here. Decision: exclude psys, use package-0 + dram as the CPU-side total. Per the plan doc's coefficient-versioning guidance, this choice should be written down alongside rig details (CPU model, kernel, governor, date) whenever coefficients get recorded.
+- avg_power_w = energy delta over the window ÷ elapsed time — an average, not an instantaneous reading. That's why it's compared against Shelly's own energy-delta-derived average, and only loosely against Shelly's instantaneous apower.
+- A clean validated run (300s window): Shelly ~4.3 W wall draw, RAPL domain coverage ratios all 7–15% of that — physically sensible since CPU package/dram is only a slice of total system power (PSU, disks, fans, etc. aren't seen by RAPL at all, per the project's plan doc).
+
+Open/unresolved (from Outcomes.md)
+- Joules → CO2e requires a grid carbon-intensity coefficient (gCO2/kWh), which is region- and time-dependent. Region is flagged as unresolved (privacy-sensitive, or needs an estimate/default). Per the project's "never blend tiers silently" principle, this must stay a separate, explicitly-labeled tier — never presented as a blended number without naming the grid assumption used.
+
+Repo state: two commits made this session are on origin/main. Other pending changes (shelly_check.py, astanalyzers.py, rule.scm, detect_ts.py, plan.md, Outcomes.md, READMEs, .gitignore, validate_shelly.py) are uncommitted and predate this session — untouched.
+

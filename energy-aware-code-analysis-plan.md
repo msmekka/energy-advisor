@@ -1,6 +1,6 @@
 # Energy-Aware Code Analysis — Recurse Project Plan
 
-*Revised September 2026. Supersedes the earlier "IDE Extension for Efficiency & Bias Coding Feedback" outline.*
+*Revised September 2026 (updated 2026-09-18 with measurement-rig findings: RAPL domain hierarchy, wall-power-over-battery decision). Supersedes the earlier "IDE Extension for Efficiency & Bias Coding Feedback" outline.*
 
 *What changed: the project is now energy-focused and CLI-first, built on a three-tier architecture that separates cheap continuous static detection from expensive offline measurement. Track A (efficiency/energy) is the active work. Track B (bias) is retained below but deferred to Impossible Day–style exploration.*
 
@@ -110,21 +110,32 @@ The old Lenovo is the right rig, not the development machine. Target-machine rep
 Setup checklist:
 
 1. Linux on the Lenovo, then `ls /sys/class/powercap/` — non-empty means RAPL is live. Any Intel from Sandy Bridge (2011) forward qualifies; most ThinkPads from 2012 on are fine.
-2. Check which domains exist. Client chips typically expose `package`, `core`, and `uncore/gfx`. **The `dram` domain is usually server-only** — a real limitation, since memory-traffic coefficients are the most interesting case. Plan to infer memory cost from tier-2 cache-miss counts rather than measure it directly.
+2. Check which domains exist. Client chips typically expose `package`, `core`, and `uncore/gfx`. **The `dram` domain is usually server-only** — a real limitation, since memory-traffic coefficients are the most interesting case. Plan to infer memory cost from tier-2 cache-miss counts rather than measure it directly. **Our rig exposes dram. We can get measurements directly**
 3. Pin the machine down. Disable turbo (`intel_pstate/no_turbo`), fix the governor with `cpupower frequency-set`, `taskset` to one core, disable the SMT sibling, stop background services, and let it thermally soak before the first sample. **Reproducibility depends far more on this than on the choice of meter** — skipping it produces variance that averaging will not fix.
 
-### Two measurement paths, in order of cost
+**Domain hierarchy, confirmed empirically on this rig:** `core` and `uncore` are children of `package-0` (sysfs subzones), not separate rails — never sum them on top of package-0. `dram` is a genuinely separate physical rail (memory controller/DIMMs) and adds to, rather than replaces, the package total. `psys` — meant to be the platform-wide umbrella covering package + dram + more — measured *lower* than package-0 + dram combined here, which is physically incoherent for an umbrella metric. **Decision: CPU-side total = sum of package domains + dram; `psys` excluded, and its inconsistency is not being root-caused.** `psys` is seemingly unreliable on this rig, and chasing why is a rabbit hole with no payoff for the project's goals — an explicit call to drop it rather than debug it. Write this choice down next to the rig details (CPU model, kernel, governor, date) whenever coefficients get recorded — it's a rig-specific finding, not a general RAPL fact.
 
-**Free, already owned:** run the Lenovo on battery and sample `/sys/class/power_supply/BAT0/power_now` — discharge rate in microwatts, whole-system, including screen, disk, and NIC. Granularity is coarse (seconds), so batch. Try this before buying anything.
+### Whole-system reference: wall power, not battery discharge
 
-**Smart plug (~$20):** choose one with a *local* HTTP API rather than a Kill A Watt, which is a display you read with your eyes and falls apart at a thousand repetitions. Two constraints: sampling is roughly 1 Hz, so any snippet must be looped for 20–30 seconds and divided; and **a laptop is a poor wall-meter subject** because battery charging masks the load. If wall metering becomes the main path, that's the argument for a NUC or any old desktop.
+Two paths were tried for a whole-system number to validate RAPL's package+dram total against (RAPL only ever sees a slice of the machine — see "Coverage" in section a).
+
+**Battery discharge (`power_now`/`energy_now`) — tried, set aside.** `power_now` is an instantaneous rate; `energy_now` is a level (µWh remaining) and the more stable of the two to sample. Worked out on this rig: `energy_now` ticks in ~10,000 µWh (10 mWh = 36 J) steps roughly every 9.5 s, giving an idle draw of ~3.8 W (36 J ÷ 9.5 s) — plausible, but **the granularity and accuracy this path can deliver on this system don't get us where we need to be**: the counter's own step size dominates short-window deltas for the same reason Shelly's `aenergy.total` does (see below), only with a coarser tick, so it can't resolve anything finer than a fairly coarse, long-window average. It's also in tension with `pin_baseline.sh`'s 600 s soak: that wants the rig parked in a stable pinned state on mains, not drained down while measuring. **Decision: use wall power (the Shelly plug) as the whole-system reference instead of battery discharge.**
+
+**Smart plug (Shelly, wall power) — the reference path.** Local HTTP API, no cloud round-trip, no Kill-A-Watt hand-reading. Built as `shelly_check.py` (RPC client) plus `validate_shelly.py` (samples RAPL and Shelly concurrently over the same window) and `validate_baseline.py` (cross-checks a saved `pin_baseline.sh` idle baseline against Shelly, sampled fresh, and flags it stale past 1 hr — the comparison is only meaningful while the rig is still in the same pinned/idle state). Two constraints came out of building these: sampling is ~1 Hz, so short windows are dominated by `aenergy.total`'s own quantization (a 30 s window can read a 0 W or a wildly inflated delta) — fixed in practice by using 300 s+ windows so real accumulated energy swamps the counter step, cross-checked against the instantaneous `apower` field and flagged if the two diverge by more than 2×. And because this rig is a laptop, not a dedicated desktop/NUC, wall draw only means "system load" if it stays plugged in with the battery already topped off — otherwise the charger's own draw contaminates the reading. That long-standing laptop caveat is mitigated this way, not eliminated.
+
+A clean validated 300 s run on this rig: Shelly ≈4.3 W wall draw at idle, RAPL package+dram covering 7–15% of that — sensible, since CPU package/DRAM is only a slice of total system power (PSU conversion loss, disk, fans, screen aren't seen by RAPL at all).
 
 ### Methodology
 
 - **Measure idle and subtract it.** The attributable figure is marginal energy over baseline, not total draw. This is also what makes a laptop measurement partially transferable to a server despite the enormous difference in fixed power.
+- **`avg_power_w` is an energy-delta average, not an instantaneous reading** — compute it as (energy delta over the window) ÷ (elapsed time) for both RAPL and Shelly, and only compare against Shelly's instantaneous `apower` loosely, since it isn't the same quantity.
 - **Batch to clear the sampling floor.** Loop the snippet until the run exceeds the meter's resolution by a comfortable margin, then divide.
 - **Version the coefficient file and record the rig in it** — CPU model, kernel, governor settings, Python version, date. Python version matters more than it looks: 3.11's specialising interpreter moved per-operation costs meaningfully, and free-threading moves them again.
 - **Don't try to build the table.** Build the harness that would build it, and populate it for three to five patterns on one machine. A defensible general table would have to vary microarchitecture, core count, governor, memory configuration, platform idle power, workload size, thermal state, and interpreter version — thousands of runs, stale in eighteen months. That's ongoing research infrastructure, which is why no good public table exists. The absence is itself a finding worth writing up.
+
+### Open: joules → CO2e
+
+Turning a measured or estimated joule figure into a CO2e figure needs a grid carbon-intensity coefficient (gCO2/kWh), which is region- and time-dependent. Region is unresolved on purpose — it's plausibly private information, and defaulting to an estimate has to be a visible, explicit choice, not a silent one. Per the never-blend-tiers-silently rule in section b), if this lands later it must be its own separately labelled tier (e.g. "estimated CO2e assuming region R, coefficient source S, dated") — never folded into the ratio numbers the tool otherwise reports.
 
 ---
 
@@ -148,8 +159,10 @@ Setup checklist:
 
 ### Phase 2 — Measurement harness
 
-- Lenovo online, powercap verified, pinning script written.
-- Harness: warmup, N repetitions, idle baseline capture and subtraction, outlier handling, results to versioned JSON.
+- ✅ Lenovo online, powercap verified
+- ✅ Pinning script written, including idle baseline capture (`pin_baseline.sh`)
+- ✅ RAPL vs Shelly wall-power cross-validation (`validate_shelly.py`, `validate_baseline.py`) — see "Whole-system reference: wall power, not battery discharge" above for the coverage-ratio sanity check and the quantization-noise fix
+- Harness: warmup, N repetitions, outlier handling, results to versioned JSON — baseline capture/subtraction itself is done; the repeated-snippet harness around it is not yet built
 - Validate the harness against something known before trusting it — a `sleep` loop versus a spin loop should show a large, predictable difference.
 
 ### Phase 3 — Coefficients

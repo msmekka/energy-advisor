@@ -24,7 +24,7 @@ Track A (efficiency/energy) is the active work; Track B (bias) is scoped in
 the plan but deferred. Per the plan's phase list: Phase 0 (AST tooling) and
 most of Phase 2 (measurement rig + RAPL/Shelly cross-validation) are done;
 Phase 1 (the actual CLI analyzer, with JSON Lines/SARIF output) hasn't
-started — `astwork/rules/` is rule prototyping and a fixture corpus, not yet
+started — `rules/` is rule prototyping and a fixture corpus, not yet
 wired into a `analyze <path>` command; Phase 3 (coefficients) and beyond are
 further out.
 
@@ -32,14 +32,18 @@ further out.
 
 ```
 energy-aware-code-analysis-plan.md   # the design doc — start here
-astwork/
-  rules/      # Tier 1: tree-sitter queries + AST visitors, one directory
-              # per rule, run against a fixture corpus. See astwork/rules/README.md.
-  measure/    # Tier 3: calibration harness for the dedicated Linux RAPL rig
+rules/        # Tier 1: tree-sitter queries + AST visitors, one directory
+              # per rule, run against a fixture corpus. See rules/README.md.
+              # Moves under etdc/ once its flat imports are packaged.
+etdc/         # "energy-time decoupling" -- the project namespace
+  rig/        # Tier 3: calibration harness for the dedicated Linux RAPL rig
               # (rc-mw01) plus Shelly-plug wall-power cross-validation.
-              # See astwork/measure/README.md. Most of it only runs on that
+              # See etdc/rig/README.md. Most of it only runs on that
               # rig, not on a dev machine.
-Outcomes.md   # raw working notes on turning joules into CO2e (see the
+.venv/        # local venv (tree-sitter + tree-sitter-python); the rig code
+              # is deliberately stdlib-only and needs none of it.
+plan/
+  Outcomes.md # raw working notes on turning joules into CO2e (see the
               # plan's "Open: joules → CO2e" section) — notes, not a
               # finished writeup
 green-ide-extension-review-and-plan.md
@@ -57,11 +61,11 @@ energyadv-ext1.py
 
 There's no top-level entry point yet (that's Phase 1). To run what exists:
 
-- `astwork/rules/` — `python3 detect.py` runs the tier-1 fixture corpus.
-  See [`astwork/rules/README.md`](astwork/rules/README.md) for the rule
+- `rules/` — `python3 detect.py` runs the tier-1 fixture corpus.
+  See [`rules/README.md`](rules/README.md) for the rule
   layout and the contract for adding a new one.
-- `astwork/measure/` — the calibration scripts (`rapl.py`,
+- `etdc/rig/` — the calibration scripts (`rapl.py`,
   `shelly_check.py`, `validate_shelly.py`, `pin_baseline.sh`). Most of these
   need the physical rig (RAPL sysfs access, the Shelly plug on the same
   network); see
-  [`astwork/measure/README.md`](astwork/measure/README.md).
+  [`etdc/rig/README.md`](etdc/rig/README.md).
