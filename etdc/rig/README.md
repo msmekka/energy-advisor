@@ -29,9 +29,16 @@ tracker.
 
 ```sh
 git clone <repo-url> ~/energy-advisor      # as the campaign user, NOT root
-cd ~/energy-advisor && git checkout etdc-restructure
+cd ~/energy-advisor
 python3 -VV                                # must be 3.12+; 3.14.4 as of writing
 ```
+
+**Which branch the rig tracks.** `main` by default, which is what a fresh
+clone gives you. Checking out a feature branch to measure work in flight is
+legitimate — often it is the whole point of having a rig — but a campaign you
+intend to *promote* should cite a sha reachable from `main`, or the published
+result references code that may be rebased away or never merged. `sync.sh`
+fast-forwards whatever branch is checked out; it does not pick one for you.
 
 The checkout must be owned by the user who will run campaigns. `sudo` is for
 `pin_baseline.sh` and nothing else — a root `git pull` leaves root-owned files
