@@ -165,7 +165,7 @@ verify_rapl_readable() {
   # of a campaign on the far side of a ${SOAK_SECONDS}s soak.
   local user="${SUDO_USER:-}" probe
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    log "(dry-run) would verify an energy_uj read as \$SUDO_USER"
+    log "(dry-run) would verify an energy_uj read as ${user:-<SUDO_USER unset>}"
     return
   fi
   if [[ -z "$user" || "$user" == "root" ]]; then
@@ -188,7 +188,7 @@ verify_rapl_readable() {
 ensure_runs_dir() {
   local user="${SUDO_USER:-}"
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    log "(dry-run) would create $RUNS_DIR owned by \$SUDO_USER"
+    log "(dry-run) would create $RUNS_DIR owned by ${user:-<SUDO_USER unset>}"
     return
   fi
   mkdir -p "$RUNS_DIR"

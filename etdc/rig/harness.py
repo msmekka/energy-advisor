@@ -3,7 +3,7 @@
 
 Run from the repo root so `python -m` puts it on sys.path; no pip install:
 
-    taskset -c 3 python3 -s -m etdc.rig.harness \
+    taskset -c 1 python3 -s -m etdc.rig.harness \
         benchmarks/eager-materialization/flag/sum_list.py \
         --n 200000 --r 500 --warmup 2 --out run.json
 

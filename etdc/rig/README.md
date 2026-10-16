@@ -89,7 +89,7 @@ The campaign runner does not exist yet. One run at a time does:
 
 ```sh
 cd ~/energy-advisor                        # must be the repo root
-PYTHONHASHSEED=0 taskset -c 3 python3 -s -m etdc.rig.harness \
+PYTHONHASHSEED=0 taskset -c 1 python3 -s -m etdc.rig.harness \
     benchmarks/eager-materialization/flag/sum_list.py \
     --n 200000 --r 500 --warmup 2 --out /tmp/run.json
 ```
@@ -102,8 +102,15 @@ Three things in that line matter:
 - **`PYTHONHASHSEED=0`.** Set construction and membership go through `hash()`,
   and the `max_set` pair exists to measure exactly that path. An unpinned seed
   injects variance into the arm under test.
-- **`taskset`** needs no root. Pinning affinity on your own process is
-  unprivileged, which is part of why the campaign needs no `sudo` at all.
+- **`taskset -c 1`, not core 3.** `rc-mw01` has 4 logical CPUs with SMT on —
+  2 physical cores, thread siblings `(0,2)` and `(1,3)` — so once
+  `pin_baseline.sh` disables SMT only `cpu0` and `cpu1` remain online and
+  `taskset -c 3` fails with `sched_setaffinity: Invalid argument`. Confirm the
+  surviving set with `cat /sys/devices/system/cpu/online` after pinning. Core 1
+  for the child leaves core 0 for the runner and everything else on the box —
+  with only two cores there is no third place to put things. `taskset` itself
+  needs no root: setting affinity on your own process is unprivileged, which is
+  part of why the campaign needs no `sudo` at all.
 
 A fixture also runs on its own, which is useful for a sanity check:
 
