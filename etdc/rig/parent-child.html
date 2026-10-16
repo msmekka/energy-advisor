@@ -1,0 +1,259 @@
+<title>Parent and Child</title>
+<style>
+  :root {
+    --page-bg: #FAFAF8;
+    --ink: #1B2430;
+    --muted: #5B6472;
+    --card-bg: #FFFFFF;
+    --card-border: #D8D4CB;
+    --tier1: #2E6F8E;
+    --tier1-tint: #E4EEF2;
+    --tier2: #6B5B95;
+    --tier2-tint: #ECE8F3;
+    --tier3: #C1562C;
+    --tier3-tint: #F7E7DE;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+    --page-bg: #14171B;
+    --ink: #E8E6E1;
+    --muted: #9AA3AF;
+    --card-bg: #1C1F24;
+    --card-border: #343A42;
+    --tier1: #6CB7D6;
+    --tier1-tint: #1C2E36;
+    --tier2: #B09FE0;
+    --tier2-tint: #272136;
+    --tier3: #E8905A;
+    --tier3-tint: #3A2217;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --page-bg: #14171B;
+    --ink: #E8E6E1;
+    --muted: #9AA3AF;
+    --card-bg: #1C1F24;
+    --card-border: #343A42;
+    --tier1: #6CB7D6;
+    --tier1-tint: #1C2E36;
+    --tier2: #B09FE0;
+    --tier2-tint: #272136;
+    --tier3: #E8905A;
+    --tier3-tint: #3A2217;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--page-bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 3rem 1.5rem 4rem;
+    min-height: 100%;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--tier3);
+  }
+
+  h1 {
+    font-size: clamp(1.4rem, 2.6vw, 1.9rem);
+    font-weight: 600;
+    margin: 0;
+    text-wrap: balance;
+    text-align: center;
+  }
+
+  figure {
+    margin: 0;
+    width: min(1100px, 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .diagram-frame {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+
+  figcaption {
+    max-width: 62ch;
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  figcaption strong {
+    color: var(--ink);
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+
+<div class="eyebrow">etdc &middot; rig operations</div>
+<h1>Parent and child: the anatomy of one measured run</h1>
+
+<figure>
+  <div class="diagram-frame">
+      <svg viewBox="0 0 1200 1090" role="img" aria-label="Anatomy of one benchmark run on the rig. A committed manifest supplies frozen N, warmup and HIT_AT per pair plus R per pair and per arm and a pinned interpreter path. The parent campaign runner, on its own core, reads the manifest, interleaves arms, and spawns one child per run under taskset with a minimal environment. The child is a fresh interpreter on the pinned core: it loads the fixture by path, discovers RAPL domains, builds the data and warms up, all before the measured window and each step separately timed. Only the RAPL start, the R-iteration work loop, and the RAPL stop sit inside the window, so interpreter startup never enters it. The child writes one single-line JSON object; the parent checks the child's reported interpreter against the manifest, adds rig provenance, a sequence number and a timestamp, and appends one row per run to an append-only JSONL. Arms are interleaved rather than blocked in time, and the ratio is computed per adjacent pair.">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--ink)"></path>
+          </marker>
+          <marker id="arrow-muted" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"></path>
+          </marker>
+        </defs>
+
+        <g font-family="'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace">
+
+          <!-- Manifest -->
+          <rect x="40" y="40" width="300" height="150" rx="6" fill="var(--tier2-tint)" stroke="var(--tier2)" stroke-width="2"></rect>
+          <text x="60" y="72" font-size="15" font-weight="600" fill="var(--ink)">Manifest</text>
+          <text x="60" y="98" font-size="12.5" fill="var(--muted)">N, warmup, HIT_AT per pair</text>
+          <text x="60" y="120" font-size="12.5" fill="var(--muted)">R per pair AND per arm</text>
+          <text x="60" y="142" font-size="12.5" fill="var(--muted)">pinned interpreter path</text>
+          <text x="60" y="162" font-size="12" font-style="italic" fill="var(--tier2)">frozen and committed &#8212;</text>
+          <text x="60" y="178" font-size="12" font-style="italic" fill="var(--tier2)">never autotuned per run</text>
+
+          <!-- Parent -->
+          <rect x="380" y="40" width="780" height="150" rx="6" fill="var(--tier1-tint)" stroke="var(--tier1)" stroke-width="2"></rect>
+          <text x="400" y="72" font-size="15" font-weight="600" fill="var(--ink)">Parent &#183; campaign runner</text>
+          <text x="1140" y="72" font-size="12" font-style="italic" fill="var(--tier1)" text-anchor="end">its own core, not the pinned one</text>
+          <text x="400" y="100" font-size="12.5" fill="var(--muted)">reads the manifest</text>
+          <text x="400" y="122" font-size="12.5" fill="var(--muted)">interleaves the arms</text>
+          <text x="400" y="144" font-size="12.5" fill="var(--muted)">spawns one child per run</text>
+          <text x="400" y="166" font-size="12.5" fill="var(--muted)">kills on timeout, never retries in place</text>
+          <text x="790" y="100" font-size="12.5" fill="var(--muted)">asserts child runtime vs. manifest</text>
+          <text x="790" y="122" font-size="12.5" fill="var(--muted)">adds rig provenance</text>
+          <text x="790" y="144" font-size="12.5" fill="var(--muted)">appends the row, with seq and time</text>
+          <text x="790" y="166" font-size="12.5" fill="var(--muted)">a failure is a row, not a gap</text>
+
+          <!-- spawn -->
+          <line x1="700" y1="190" x2="700" y2="256" stroke="var(--ink)" stroke-width="1.75" marker-end="url(#arrow)"></line>
+          <text x="720" y="208" font-size="11.5" fill="var(--ink)">taskset -c 3 python3 -s -m etdc.rig.harness FIXTURE</text>
+          <text x="720" y="226" font-size="11.5" fill="var(--muted)">--n N --r R --warmup W --out run.json</text>
+          <text x="720" y="244" font-size="11.5" fill="var(--muted)">env: PATH + PYTHONHASHSEED=0 &#183; cwd: repo root</text>
+
+          <!-- Fixture -->
+          <rect x="40" y="320" width="240" height="180" rx="6" fill="var(--card-bg)" stroke="var(--card-border)" stroke-width="1.5"></rect>
+          <text x="60" y="352" font-size="15" font-weight="600" fill="var(--ink)">Fixture</text>
+          <text x="60" y="378" font-size="12.5" fill="var(--muted)">build(n)</text>
+          <text x="60" y="400" font-size="12.5" fill="var(--muted)">work(data)</text>
+          <text x="60" y="422" font-size="12.5" fill="var(--muted)">__main__ guard</text>
+          <text x="60" y="450" font-size="11.5" font-style="italic" fill="var(--tier1)">runnable on its own;</text>
+          <text x="60" y="468" font-size="11.5" font-style="italic" fill="var(--tier1)">loaded here by path under a</text>
+          <text x="60" y="486" font-size="11.5" font-style="italic" fill="var(--tier1)">name that is not __main__</text>
+          <line x1="282" y1="410" x2="336" y2="410" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arrow-muted)"></line>
+
+          <!-- rapl.py -->
+          <rect x="960" y="320" width="200" height="180" rx="6" fill="var(--card-bg)" stroke="var(--card-border)" stroke-width="1.5"></rect>
+          <text x="980" y="352" font-size="14" font-weight="600" fill="var(--ink)">rapl.py</text>
+          <text x="980" y="378" font-size="12" fill="var(--muted)">start(domains)</text>
+          <text x="980" y="400" font-size="12" fill="var(--muted)">stop(domains, mark)</text>
+          <text x="980" y="428" font-size="11.5" font-style="italic" fill="var(--tier3)">counters &#8594; clock at</text>
+          <text x="980" y="446" font-size="11.5" font-style="italic" fill="var(--tier3)">BOTH ends, so the read</text>
+          <text x="980" y="464" font-size="11.5" font-style="italic" fill="var(--tier3)">overhead cancels</text>
+          <text x="980" y="486" font-size="11.5" font-style="italic" fill="var(--muted)">no total, no zeroes</text>
+          <line x1="956" y1="566" x2="882" y2="566" stroke="var(--muted)" stroke-width="1.5" marker-end="url(#arrow-muted)"></line>
+
+          <!-- Child -->
+          <rect x="340" y="260" width="560" height="450" rx="8" fill="var(--card-bg)" stroke="var(--card-border)" stroke-width="1.5"></rect>
+          <text x="364" y="292" font-size="15" font-weight="600" fill="var(--ink)">Child &#183; etdc/rig/harness.py</text>
+          <text x="364" y="314" font-size="12" fill="var(--muted)">fresh interpreter per run &#183; pinned core &#183; one fixture, one window</text>
+
+          <!-- before the window -->
+          <rect x="364" y="336" width="512" height="146" rx="6" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 5"></rect>
+          <text x="384" y="360" font-size="12" font-weight="600" fill="var(--muted)">before the window &#8212; each step timed separately</text>
+          <text x="384" y="386" font-size="12" fill="var(--muted)">load fixture</text>
+          <text x="760" y="386" font-size="12" fill="var(--ink)">import_s</text>
+          <text x="384" y="406" font-size="12" fill="var(--muted)">discover_domains()</text>
+          <text x="760" y="406" font-size="12" fill="var(--ink)">one walk</text>
+          <text x="384" y="426" font-size="12" fill="var(--muted)">build(n)</text>
+          <text x="760" y="426" font-size="12" fill="var(--ink)">build_s</text>
+          <text x="384" y="446" font-size="12" fill="var(--muted)">warmup &#215; W</text>
+          <text x="760" y="446" font-size="12" fill="var(--ink)">warmup_s</text>
+          <text x="384" y="466" font-size="12" fill="var(--muted)">gc.collect()</text>
+          <text x="760" y="466" font-size="11.5" font-style="italic" fill="var(--muted)">GC stays on</text>
+
+          <!-- the measured window -->
+          <rect x="364" y="500" width="512" height="136" rx="6" fill="var(--tier3-tint)" stroke="var(--tier3)" stroke-width="2.5"></rect>
+          <text x="384" y="524" font-size="12.5" font-weight="600" fill="var(--tier3)">THE MEASURED WINDOW</text>
+          <text x="384" y="552" font-size="12.5" fill="var(--ink)">mark = rapl.start(domains)</text>
+          <text x="384" y="574" font-size="12.5" fill="var(--ink)">for _ in range(R): work(data)</text>
+          <text x="384" y="596" font-size="12.5" fill="var(--ink)">record = rapl.stop(domains, mark)</text>
+          <text x="384" y="622" font-size="11" font-style="italic" fill="var(--tier3)">one call, one store &#8212; identical bytecode in both arms</text>
+
+          <text x="364" y="660" font-size="11.5" font-style="italic" fill="var(--muted)">~20&#8211;30 ms of interpreter startup never enters the window:</text>
+          <text x="364" y="678" font-size="11.5" font-style="italic" fill="var(--muted)">the child brackets itself, because the parent cannot.</text>
+          <text x="364" y="700" font-size="12" font-weight="600" fill="var(--ink)">&#8594; one JSON object, written to --out</text>
+
+          <!-- child -> run.json -->
+          <line x1="620" y1="710" x2="620" y2="748" stroke="var(--ink)" stroke-width="1.75" marker-end="url(#arrow)"></line>
+
+          <!-- run.json -->
+          <rect x="330" y="748" width="580" height="80" rx="8" fill="var(--card-bg)" stroke="var(--card-border)" stroke-width="1.5"></rect>
+          <text x="620" y="776" font-size="13.5" font-weight="700" fill="var(--ink)" text-anchor="middle">run.json &#8212; one line, concatenable</text>
+          <text x="620" y="798" font-size="11" fill="var(--muted)" text-anchor="middle">status &#183; n &#183; r &#183; warmup &#183; import_s &#183; build_s &#183; warmup_s &#183; duration_s</text>
+          <text x="620" y="816" font-size="11" fill="var(--muted)" text-anchor="middle">energy_uj{} &#183; avg_power_w{} &#183; runtime{} &#183; result_repr</text>
+
+          <!-- run.json -> jsonl -->
+          <line x1="620" y1="828" x2="620" y2="866" stroke="var(--ink)" stroke-width="1.75" marker-end="url(#arrow)"></line>
+          <text x="640" y="846" font-size="11.5" fill="var(--muted)">parent checks runtime.version against the manifest</text>
+          <text x="640" y="862" font-size="11.5" fill="var(--muted)">mismatch &#8594; failed row, not a pooled one</text>
+
+          <!-- campaign jsonl -->
+          <rect x="330" y="866" width="580" height="88" rx="8" fill="var(--card-bg)" stroke="var(--card-border)" stroke-width="1.5"></rect>
+          <text x="620" y="894" font-size="14" font-weight="700" fill="var(--ink)" text-anchor="middle">runs/campaign.jsonl</text>
+          <text x="620" y="916" font-size="12" fill="var(--muted)" text-anchor="middle">+ rig provenance: host &#183; CPU &#183; kernel &#183; governor &#183; turbo &#183; SMT</text>
+          <text x="620" y="936" font-size="12" fill="var(--muted)" text-anchor="middle">+ seq &#183; wall timestamp &#183; append-only, never an aggregate</text>
+
+          <!-- interleave strip -->
+          <text x="40" y="1000" font-size="12" font-weight="600" fill="var(--ink)">arm order</text>
+          <rect x="150" y="978" width="74" height="34" rx="4" fill="var(--tier3-tint)" stroke="var(--tier3)" stroke-width="1.5"></rect>
+          <text x="187" y="1000" font-size="11" fill="var(--ink)" text-anchor="middle">flag</text>
+          <rect x="230" y="978" width="74" height="34" rx="4" fill="var(--card-bg)" stroke="var(--tier1)" stroke-width="1.5"></rect>
+          <text x="267" y="1000" font-size="11" fill="var(--ink)" text-anchor="middle">no-flag</text>
+          <rect x="310" y="978" width="74" height="34" rx="4" fill="none" stroke="var(--muted)" stroke-width="1.25" stroke-dasharray="4 4"></rect>
+          <text x="347" y="1000" font-size="11" fill="var(--muted)" text-anchor="middle">null</text>
+          <rect x="390" y="978" width="74" height="34" rx="4" fill="var(--tier3-tint)" stroke="var(--tier3)" stroke-width="1.5"></rect>
+          <text x="427" y="1000" font-size="11" fill="var(--ink)" text-anchor="middle">flag</text>
+          <rect x="470" y="978" width="74" height="34" rx="4" fill="var(--card-bg)" stroke="var(--tier1)" stroke-width="1.5"></rect>
+          <text x="507" y="1000" font-size="11" fill="var(--ink)" text-anchor="middle">no-flag</text>
+          <rect x="550" y="978" width="74" height="34" rx="4" fill="none" stroke="var(--muted)" stroke-width="1.25" stroke-dasharray="4 4"></rect>
+          <text x="587" y="1000" font-size="11" fill="var(--muted)" text-anchor="middle">null</text>
+          <rect x="630" y="978" width="74" height="34" rx="4" fill="var(--tier3-tint)" stroke="var(--tier3)" stroke-width="1.5"></rect>
+          <text x="667" y="1000" font-size="11" fill="var(--ink)" text-anchor="middle">flag</text>
+          <rect x="710" y="978" width="74" height="34" rx="4" fill="var(--card-bg)" stroke="var(--tier1)" stroke-width="1.5"></rect>
+          <text x="747" y="1000" font-size="11" fill="var(--ink)" text-anchor="middle">no-flag</text>
+          <text x="800" y="1000" font-size="12" fill="var(--muted)">&#8230; one fresh process each</text>
+          <text x="150" y="1042" font-size="11.5" fill="var(--muted)">Interleaved, never blocked in time &#8212; thermal drift would otherwise alias directly onto the arm difference.</text>
+          <text x="150" y="1060" font-size="11.5" fill="var(--muted)">Same N across a pair&#8217;s arms; R may differ per arm, so ratios are formed from E/R.</text>
+
+        </g>
+      </svg>
+  </div>
+  <figcaption>The parent orchestrates and records; the <strong>child brackets itself</strong>, because bracketing the whole process would put interpreter startup inside the window. Everything the run needs &mdash; fixture load, domain discovery, <code>build(n)</code>, warmup &mdash; happens above the window and is timed separately, so <strong>the window holds the R loop and nothing else</strong>. Arms are interleaved rather than blocked in time, and a failed run is still a row.</figcaption>
+</figure>

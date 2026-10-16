@@ -5,17 +5,29 @@
 #   sudo ./pin_baseline.sh                # pin, soak, capture baseline
 #   sudo ./pin_baseline.sh --dry-run      # print what would happen, change nothing
 #   sudo ./pin_baseline.sh --restore      # undo pinning, restart stopped services
+#        ./pin_baseline.sh --status       # what is pinned right now (no root needed)
+#
+# This is the ONLY part of the measurement pipeline that needs root. It relaxes
+# the RAPL counters to 0444 for the session so benchmark children can read them
+# unprivileged; --restore puts every mode back exactly as it found it. A reboot
+# is also a full restore -- sysfs modes, cpufreq, SMT and stopped services are
+# all session state.
 #
 # Assumes Linux with intel_pstate (pyRAPL is Intel-only). Edit NOISY_SERVICES
 # for your distro before the first real run — the list here is a conservative
 # guess, not a verified fit for your install.
 
-set -euo pipefail
+set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE_FILE="/var/tmp/energy-advisor-pin.state"
 SERVICES_FILE="${STATE_FILE}.services"
+RAPL_MODES_FILE="${STATE_FILE}.rapl"
 BASELINE_DIR="${BASELINE_DIR:-$SCRIPT_DIR/measurements}"
+# Baselines are written here by root; campaign rows are written by the
+# unprivileged runner and get their own tree. Separate producers, separate
+# owners -- the runner never needs write access to a root-owned directory.
+RUNS_DIR="${RUNS_DIR:-$SCRIPT_DIR/runs}"
 SOAK_SECONDS="${SOAK_SECONDS:-600}"     # thermal soak before capturing baseline
 SAMPLE_SECONDS="${SAMPLE_SECONDS:-30}"  # idle RAPL sample window
 DRY_RUN=0
@@ -82,7 +94,7 @@ read_file() {
   # transient EBUSY. cpufreq attribute *reads* use the same trylock-on-the-
   # policy-rwsem mechanism as writes, so a plain `cat` right after an SMT
   # sibling offline can fail exactly like a write would — and under
-  # set -euo pipefail, an unguarded failure here kills the whole script.
+  # set -Eeuo pipefail, an unguarded failure here kills the whole script.
   local path="$1" attempt out
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
     if out="$(cat "$path" 2>/dev/null)"; then
@@ -103,6 +115,160 @@ record_orig() {
   fi
 }
 
+rapl_attr_paths() {
+  # One path per RAPL attribute the reader needs, symlinks resolved. The zone
+  # hierarchy is at most two levels (package -> subzone), so this globs both
+  # explicitly rather than using `find -L`, which can wander into each device
+  # directory's "subsystem" backlink and loop forever. Caller pipes to sort -u;
+  # the same zone appears at both levels on some kernels.
+  local zone attr
+  for zone in /sys/class/powercap/intel-rapl*/ /sys/class/powercap/intel-rapl*/intel-rapl*/; do
+    [[ -d "$zone" ]] || continue
+    for attr in energy_uj name max_energy_range_uj; do
+      [[ -e "$zone$attr" ]] || continue
+      readlink -f "$zone$attr" 2>/dev/null || true
+    done
+  done
+}
+
+relax_rapl() {
+  # energy_uj is commonly 0400 (PLATYPUS / CVE-2020-8694). Relaxing it to 0444
+  # for the session is what keeps the campaign unprivileged: children read the
+  # counters directly and no benchmark process ever gets root. name and
+  # max_energy_range_uj go along too -- discover_domains() reads all three, and
+  # an unreadable name raises out of the walk rather than being skipped.
+  #
+  # The original mode of every file is recorded, not assumed: restoring to a
+  # guessed 0400 would be worse than not restoring at all.
+  local path mode
+  [[ "$DRY_RUN" -eq 1 ]] || : > "$RAPL_MODES_FILE"
+  while read -r path; do
+    [[ -n "$path" ]] || continue
+    mode="$(stat -c '%a' "$path" 2>/dev/null)" || continue
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      log "(dry-run) would chmod 0$mode -> 0444  $path"
+    else
+      printf '%s %s\n' "$mode" "$path" >> "$RAPL_MODES_FILE"
+      chmod 0444 "$path" && log "relaxed 0$mode -> 0444  $path"
+    fi
+  done < <(rapl_attr_paths | sort -u)
+
+  if [[ "$DRY_RUN" -eq 0 && ! -s "$RAPL_MODES_FILE" ]]; then
+    echo "error: no RAPL attribute files found under /sys/class/powercap -- is this an Intel box with intel_rapl loaded?" >&2
+    exit 1
+  fi
+}
+
+verify_rapl_readable() {
+  # chmod can report success and still leave the counters unreadable to the
+  # campaign user. Catch that here, in the first second, rather than at run 1
+  # of a campaign on the far side of a ${SOAK_SECONDS}s soak.
+  local user="${SUDO_USER:-}" probe
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    log "(dry-run) would verify an energy_uj read as \$SUDO_USER"
+    return
+  fi
+  if [[ -z "$user" || "$user" == "root" ]]; then
+    log "warning: SUDO_USER unset (invoked as root directly) -- cannot verify the unprivileged read; check it by hand as the campaign user"
+    return
+  fi
+  probe="$(rapl_attr_paths | grep -m1 '/energy_uj$' || true)"
+  if [[ -z "$probe" ]]; then
+    echo "error: no energy_uj found to verify" >&2
+    exit 1
+  fi
+  if sudo -u "$user" cat "$probe" >/dev/null 2>&1; then
+    log "verified: $user can read $probe"
+  else
+    echo "error: $user still cannot read $probe after chmod -- aborting before the soak" >&2
+    exit 1
+  fi
+}
+
+ensure_runs_dir() {
+  local user="${SUDO_USER:-}"
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    log "(dry-run) would create $RUNS_DIR owned by \$SUDO_USER"
+    return
+  fi
+  mkdir -p "$RUNS_DIR"
+  if [[ -n "$user" && "$user" != "root" ]]; then
+    chown "$user:$(id -gn "$user")" "$RUNS_DIR" && log "runs dir $RUNS_DIR owned by $user"
+  fi
+}
+
+restore_rapl_modes() {
+  # Best-effort per file. sysfs attributes are recreated with default modes on
+  # reboot, so a path that is gone is not an error -- the kernel already did
+  # the restore.
+  [[ -f "$RAPL_MODES_FILE" ]] || return 0
+  local mode path
+  while read -r mode path; do
+    [[ -n "$mode" && -n "$path" ]] || continue
+    if [[ ! -e "$path" ]]; then
+      log "skipped (gone, likely rebooted): $path"
+      continue
+    fi
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      log "(dry-run) would chmod 0$mode  $path"
+    else
+      chmod "$mode" "$path" 2>/dev/null && log "restored 0$mode  $path"
+    fi
+  done < "$RAPL_MODES_FILE"
+  [[ "$DRY_RUN" -eq 1 ]] || rm -f "$RAPL_MODES_FILE"
+}
+
+on_premature_exit() {
+  # Pinning is a sequence of partial state changes. Dying halfway through -- a
+  # failed write, Ctrl-C during the soak, SIGTERM -- would otherwise leave the
+  # rig turbo-disabled, SMT-off, counters world-readable and services stopped,
+  # with no run to show for it. Disarm first so a failure inside the rollback
+  # cannot re-enter here.
+  local rc=$?
+  trap - ERR INT TERM
+  log "premature exit (status $rc) during pin -- rolling back rather than leaving the rig half-pinned"
+  restore || log "warning: rollback itself failed -- run --status, then --restore by hand"
+  exit "$rc"
+}
+
+status() {
+  # Answers "is this rig still pinned?" without root, so a crashed campaign
+  # needs no archaeology to recover from.
+  local path mode want
+  if [[ -f "$STATE_FILE" ]]; then
+    log "state file present: $STATE_FILE (pinned, or a pin run was interrupted)"
+    sed 's/^/    /' "$STATE_FILE"
+  else
+    log "no state file at $STATE_FILE -- nothing recorded as pinned"
+  fi
+  [[ -f /sys/devices/system/cpu/intel_pstate/no_turbo ]] && \
+    log "no_turbo now: $(cat /sys/devices/system/cpu/intel_pstate/no_turbo 2>/dev/null || echo '?')"
+  [[ -f /sys/devices/system/cpu/smt/control ]] && \
+    log "SMT now: $(cat /sys/devices/system/cpu/smt/control 2>/dev/null || echo '?')"
+  log "cpu0 governor now: $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo '?')"
+  if [[ -f "$RAPL_MODES_FILE" ]]; then
+    while read -r want path; do
+      [[ -n "$path" ]] || continue
+      mode="$(stat -c '%a' "$path" 2>/dev/null || echo 'gone')"
+      log "rapl $path: now 0$mode, original 0$want"
+    done < "$RAPL_MODES_FILE"
+  else
+    log "no recorded RAPL mode changes"
+  fi
+  if [[ -n "${SUDO_USER:-}" || $EUID -ne 0 ]]; then
+    local probe
+    probe="$(rapl_attr_paths | grep -m1 '/energy_uj$' || true)"
+    if [[ -n "$probe" ]]; then
+      if [[ $EUID -ne 0 ]] && cat "$probe" >/dev/null 2>&1; then
+        log "this user CAN read $probe -- a campaign would run"
+      elif [[ $EUID -ne 0 ]]; then
+        log "this user CANNOT read $probe -- a campaign would fail at run 1"
+      fi
+    fi
+  fi
+  log "a reboot restores all of the above; nothing here survives one"
+}
+
 require_root() {
   if [[ $EUID -ne 0 ]]; then
     echo "error: run with sudo" >&2
@@ -113,6 +279,18 @@ require_root() {
 pin() {
   local turbo_orig_val smt_orig_val governor_orig_val minfreq_orig_val maxfreq_orig_val base_freq
   [[ "$DRY_RUN" -eq 1 ]] || : > "$STATE_FILE"
+
+  # Armed for the whole pinning sequence, disarmed only once the baseline is
+  # captured. Everything from here to that point is rolled back on any
+  # premature exit.
+  [[ "$DRY_RUN" -eq 1 ]] || trap on_premature_exit ERR INT TERM
+
+  # RAPL permissions first: the cheapest step, and the one most likely to
+  # reveal that this rig cannot support an unprivileged campaign at all. Better
+  # to learn that in the first second than after a ${SOAK_SECONDS}s soak.
+  relax_rapl
+  verify_rapl_readable
+  ensure_runs_dir
 
   # --- Noisy services (stopped first — thermald etc. actively rewrite
   # cpufreq policy attributes and will contend with the writes below if
@@ -204,6 +382,11 @@ pin() {
   sleep "$SOAK_SECONDS"
 
   capture_baseline
+
+  # Pinning completed. From here the pinned state is meant to persist for the
+  # campaign, so a later exit must NOT roll it back.
+  trap - ERR INT TERM
+  log "rig pinned and ready. Campaign runs unprivileged; use --status to check, --restore when done."
 }
 
 capture_baseline() {
@@ -217,7 +400,8 @@ capture_baseline() {
 restore() {
   if [[ ! -f "$STATE_FILE" ]]; then
     log "no state file at $STATE_FILE — nothing to restore"
-    exit 0
+    restore_rapl_modes
+    return 0
   fi
   # shellcheck disable=SC1090
   source "$STATE_FILE"
@@ -251,6 +435,8 @@ restore() {
     [[ "$DRY_RUN" -eq 1 ]] || rm -f "$SERVICES_FILE"
   fi
 
+  restore_rapl_modes
+
   [[ "$DRY_RUN" -eq 1 ]] || rm -f "$STATE_FILE"
   log "restore complete"
 }
@@ -261,9 +447,14 @@ main() {
     case "$arg" in
       --dry-run) DRY_RUN=1 ;;
       --restore) mode="restore" ;;
-      *) echo "usage: $0 [--restore] [--dry-run]" >&2; exit 1 ;;
+      --status) mode="status" ;;
+      *) echo "usage: $0 [--restore] [--status] [--dry-run]" >&2; exit 1 ;;
     esac
   done
+
+  # --status only reads, so it works as the campaign user -- which is the
+  # point: it also reports whether THAT user can read the counters.
+  if [[ "$mode" == "status" ]]; then status; exit 0; fi
 
   [[ "$DRY_RUN" -eq 1 ]] || require_root
   if [[ "$mode" == "restore" ]]; then restore; else pin; fi
