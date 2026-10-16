@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" role="img" aria-label="One measurement session on the rig, as a sequence across two privilege lanes. Step one, sync.sh, runs as the campaign user: it fast-forwards the checkout, refuses a dirty tree or a root user, and prints the HEAD sha that will be recorded on every row. Step two, pin_baseline.sh, runs under sudo: it relaxes energy_uj to 0444, verifies the read as the campaign user, stops noisy services, disables turbo and SMT and pins the governor, soaks for 600 seconds and captures a 30 second idle baseline; a premature exit anywhere in this step rolls back automatically. Step three, the campaign, runs as the campaign user with no sudo at all, interleaving flag, no-flag, null and idle arms over roughly 1200 runs and writing one row per run. Step four, pin_baseline.sh --restore, runs under sudo and puts every recorded mode back and restarts the stopped services; a reboot does the same. The rig stays pinned from step two until step four, and --status reports that state without root at any point. Analysis happens afterwards, off the rig.">
+  <rect x="0" y="0" width="1200" height="620" fill="#FAFAF8"/>
+
+  <g font-family="'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace">
+
+    <text x="20" y="34" font-size="12" font-weight="600" fill="#1B2430">ONE SESSION ON rc-mw01</text>
+    <text x="1180" y="34" font-size="11" font-style="italic" fill="#5B6472" text-anchor="end">ordered left to right; not to scale</text>
+
+    <!-- privilege lanes -->
+    <rect x="0" y="60" width="1200" height="240" fill="#F7E7DE" opacity="0.4"/>
+    <rect x="0" y="330" width="1200" height="200" fill="#E4EEF2" opacity="0.4"/>
+    <text x="20" y="84" font-size="11.5" font-weight="600" fill="#C1562C">ROOT &#183; sudo</text>
+    <text x="20" y="354" font-size="11.5" font-weight="600" fill="#2E6F8E">CAMPAIGN USER</text>
+    <text x="20" y="372" font-size="10.5" font-style="italic" fill="#5B6472">no sudo, ever</text>
+
+    <!-- 1 sync -->
+    <rect x="140" y="390" width="200" height="132" rx="2" fill="#FFFFFF" stroke="#2E6F8E" stroke-width="1.75"/>
+    <text x="160" y="414" font-size="13" font-weight="700" fill="#1B2430">1 &#183; ./sync.sh</text>
+    <text x="160" y="438" font-size="11.5" fill="#5B6472">pull --ff-only</text>
+    <text x="160" y="456" font-size="11.5" fill="#5B6472">refuses a dirty tree</text>
+    <text x="160" y="474" font-size="11.5" fill="#5B6472">refuses root</text>
+    <text x="160" y="496" font-size="10.5" font-style="italic" fill="#2E6F8E">prints the sha that</text>
+    <text x="160" y="510" font-size="10.5" font-style="italic" fill="#2E6F8E">lands on every row</text>
+
+    <!-- 2 pin -->
+    <rect x="370" y="90" width="390" height="190" rx="2" fill="#FFFFFF" stroke="#C1562C" stroke-width="2"/>
+    <text x="390" y="116" font-size="13" font-weight="700" fill="#1B2430">2 &#183; sudo ./pin_baseline.sh</text>
+    <text x="390" y="140" font-size="11.5" fill="#5B6472">relax energy_uj to 0444</text>
+    <text x="390" y="158" font-size="11.5" fill="#5B6472">verify the read as the campaign user</text>
+    <text x="390" y="176" font-size="11.5" fill="#5B6472">stop noisy services</text>
+    <text x="390" y="194" font-size="11.5" fill="#5B6472">turbo off, SMT off, governor pinned</text>
+    <text x="390" y="212" font-size="11.5" fill="#5B6472">thermal soak</text>
+    <text x="740" y="212" font-size="11.5" fill="#1B2430" text-anchor="end">600 s</text>
+    <text x="390" y="230" font-size="11.5" fill="#5B6472">idle baseline capture</text>
+    <text x="740" y="230" font-size="11.5" fill="#1B2430" text-anchor="end">30 s</text>
+    <text x="390" y="256" font-size="10.5" font-style="italic" fill="#C1562C">a premature exit anywhere in here rolls back by itself</text>
+    <text x="390" y="270" font-size="10.5" font-style="italic" fill="#C1562C">&#8212; the rig is never left half-pinned</text>
+
+    <!-- 3 campaign -->
+    <rect x="790" y="390" width="235" height="132" rx="2" fill="#FFFFFF" stroke="#2E6F8E" stroke-width="1.75"/>
+    <text x="810" y="414" font-size="13" font-weight="700" fill="#1B2430">3 &#183; the campaign</text>
+    <text x="810" y="438" font-size="11.5" fill="#5B6472">flag &#183; no-flag &#183; null &#183; idle</text>
+    <text x="810" y="456" font-size="11.5" fill="#5B6472">interleaved, never blocked</text>
+    <text x="810" y="474" font-size="11.5" fill="#5B6472">one row per run, into runs/</text>
+    <text x="810" y="496" font-size="10.5" font-style="italic" fill="#2E6F8E">~1200 runs, unprivileged</text>
+
+    <!-- 4 restore -->
+    <rect x="1045" y="90" width="145" height="140" rx="2" fill="#FFFFFF" stroke="#C1562C" stroke-width="2"/>
+    <text x="1065" y="116" font-size="13" font-weight="700" fill="#1B2430">4 &#183; --restore</text>
+    <text x="1065" y="140" font-size="11.5" fill="#5B6472">sudo again</text>
+    <text x="1065" y="158" font-size="11.5" fill="#5B6472">modes put back</text>
+    <text x="1065" y="176" font-size="11.5" fill="#5B6472">services back up</text>
+    <text x="1065" y="198" font-size="10.5" font-style="italic" fill="#C1562C">a reboot does</text>
+    <text x="1065" y="212" font-size="10.5" font-style="italic" fill="#C1562C">the same thing</text>
+
+    <!-- right-angle routing: the zigzag IS the privilege boundary being crossed -->
+    <polyline points="342,430 356,430 356,185 368,185" fill="none" stroke="#1B2430" stroke-width="1.5"/>
+    <polygon points="368,185 360,181 360,189" fill="#1B2430"/>
+    <polyline points="762,185 776,185 776,430 788,430" fill="none" stroke="#1B2430" stroke-width="1.5"/>
+    <polygon points="788,430 780,426 780,434" fill="#1B2430"/>
+    <polyline points="1027,430 1036,430 1036,160 1043,160" fill="none" stroke="#1B2430" stroke-width="1.5"/>
+    <polygon points="1043,160 1035,156 1035,164" fill="#1B2430"/>
+
+    <!-- the pinned span -->
+    <line x1="370" y1="560" x2="1190" y2="560" stroke="#C1562C" stroke-width="1.5"/>
+    <line x1="370" y1="552" x2="370" y2="568" stroke="#C1562C" stroke-width="1.5"/>
+    <line x1="1190" y1="552" x2="1190" y2="568" stroke="#C1562C" stroke-width="1.5"/>
+    <text x="780" y="552" font-size="11.5" font-weight="600" fill="#C1562C" text-anchor="middle">rig pinned &#183; energy_uj 0444 &#183; counters readable without root</text>
+    <text x="780" y="584" font-size="11" fill="#5B6472" text-anchor="middle">./pin_baseline.sh --status answers &#8220;is it still pinned?&#8221; at any point, as any user</text>
+
+    <text x="20" y="604" font-size="11" font-style="italic" fill="#5B6472">afterwards, off the rig: validate the rows, then promote into results/&#8249;date&#8250;-&#8249;sha&#8250;/ &#8212; rows, coefficients, report</text>
+
+  </g>
+</svg>
