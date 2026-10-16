@@ -166,6 +166,31 @@ it silently misses `psys`/`core`/`uncore` (all of which this rig exposes).
 python3 rapl.py --seconds 30 --out baseline.json
 ```
 
+### Which domains count
+
+Confirmed on this rig; the decision is recorded in
+[the plan doc](../../energy-aware-code-analysis-plan.md) and is **settled, not
+open**:
+
+- `core` and `uncore` are **subzones of `package-0`**, not separate rails.
+  Adding them on top of package-0 double-counts.
+- `dram` is a genuinely separate physical rail and **does** add to the package
+  total. (Most client chips do not expose it at all; this rig does, which is
+  why memory-traffic coefficients are reachable here.)
+- `psys` is meant to be the platform-wide umbrella, but measures *lower* than
+  package-0 + dram here, which is incoherent for an umbrella metric. It is
+  **excluded, and deliberately not root-caused** — a rig-specific finding, not
+  a general RAPL fact, and chasing it has no payoff for this project.
+- `uncore` additionally reads exactly 0 on this rig, across both a 30 s and a
+  5 s window.
+
+So the **CPU-side total is `package-0` + `dram`**.
+
+Exclusion happens at analysis, never at capture: every domain stays on every
+row. You can drop a domain from a sum afterwards; you cannot recover one you
+never wrote down. Record this choice next to the rig details — CPU model,
+kernel, governor, date — wherever coefficients are published.
+
 ### `harness.py`
 
 The child half of a run: one fixture, one measured window, one JSON row. The

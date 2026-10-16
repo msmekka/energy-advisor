@@ -341,6 +341,15 @@ pin() {
   # --- Governor + frequency lock to base clock ---
   local governor_saved=0
   for cpu in /sys/devices/system/cpu/cpu[0-9]*; do
+    # An SMT sibling offlined above KEEPS its cpufreq attributes visible, so a
+    # -f test passes and every write then returns EBUSY until the retries run
+    # out. On rc-mw01 that burned ~8s and printed two alarming warnings about
+    # a non-problem. cpu0 has no "online" file on most kernels because it
+    # cannot be offlined, so a missing file means online.
+    if [[ -f "$cpu/online" && "$(cat "$cpu/online" 2>/dev/null)" != "1" ]]; then
+      log "skipping $cpu (offline)"
+      continue
+    fi
     [[ -f "$cpu/cpufreq/scaling_governor" ]] || continue
 
     if [[ "$governor_saved" -eq 0 ]]; then
@@ -412,10 +421,20 @@ restore() {
 
   if [[ -n "${smt_orig:-}" ]]; then
     write_file /sys/devices/system/cpu/smt/control "$smt_orig" "SMT restored: $smt_orig"
+    # Mirror of the pin-side settle: re-onlining siblings rebuilds cpufreq
+    # policy, and the governor writes below land mid-rebuild without this.
+    if [[ "$DRY_RUN" -eq 0 ]]; then
+      log "settling 2s for sibling-online cpufreq policy rebuild"
+      sleep 2
+    fi
   fi
 
   if [[ -n "${governor_orig:-}" ]]; then
     for cpu in /sys/devices/system/cpu/cpu[0-9]*; do
+      if [[ -f "$cpu/online" && "$(cat "$cpu/online" 2>/dev/null)" != "1" ]]; then
+        log "skipping $cpu (still offline)"
+        continue
+      fi
       [[ -f "$cpu/cpufreq/scaling_governor" ]] || continue
       write_file "$cpu/cpufreq/scaling_max_freq" "$maxfreq_orig" "$cpu max_freq restored"
       write_file "$cpu/cpufreq/scaling_min_freq" "$minfreq_orig" "$cpu min_freq restored"
