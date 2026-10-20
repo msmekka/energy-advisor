@@ -175,10 +175,38 @@ python3 benchmarks/eager-materialization/flag/sum_list.py 200000
 
 ### Off-rig, after a campaign
 
-Validate the rows, then promote a campaign worth citing into
-`results/<date>-<short-sha>/`. Raw rows in `runs/` are scratch and gitignored;
-a promoted campaign carries its rows verbatim alongside the manifest, the rig
-provenance, the coefficients and the report. None of this is built yet.
+The rig only ever produces rows. Everything interpretive happens here, where
+it can be re-run and argued with:
+
+```sh
+python3 -s -m etdc.rig.report etdc/rig/runs/*.jsonl --out results/
+```
+
+That runs the promotion checklist and, if it passes, writes
+`results/<date>-<short-sha>/` holding `rows.jsonl` (verbatim, failures
+included), `manifest.json`, `rig.json`, `coefficients.json`, `report.md` and
+`charts/`. Raw rows in `runs/` stay gitignored scratch — every campaign,
+including the bad ones; a promoted campaign is the subset worth citing.
+
+**Promotion is a checkable list, not a judgment.** One interpreter, one SHA, a
+clean tree, a pinned child, one RAPL domain set, an idle window to subtract,
+no negative `E_active`, no window under the floor, at least three ratio pairs
+per point. A failed check refuses to promote. `--anyway` promotes regardless
+and archives the failures *in* the report — a reader who cannot see a
+campaign's defects cannot tell it from a filtered one.
+
+Failed *rows* are not themselves a failed check: they are retained verbatim
+and tabulated. Silently dropping them is the one thing that would make the
+archive untrustworthy.
+
+The date and SHA in the directory name come from the rows, not from the clock,
+so a campaign promoted a month late keeps the date it was measured — and
+regenerating a promoted campaign should give an empty `git diff`. That is the
+test that the report still matches the rows beside it.
+
+**This is one view, not the view.** The rows are the artifact and every number
+in the report is recomputable from them, so reporting differently is a
+supported thing to do rather than a fork.
 
 ---
 
@@ -298,6 +326,22 @@ Reads a `decouple.py --json` summary and writes the `ratio(N)` SVG plus the
 Markdown table view. Deterministic by construction: same rows in, byte-identical
 chart out, so regenerating a committed report and finding an empty `git diff`
 is itself the test that the report still matches the rows beside it.
+
+### `report.py`
+
+Off-rig post-processing: rows in, a citable `results/<date>-<short-sha>/` out.
+Orchestrates `decouple.py` and `chart.py` and adds the promotion checklist,
+`coefficients.json` (keyed on `rule_id`, the tier-1 join key, carrying both
+the raw and the idle-subtracted quotient) and the verdict.
+
+Verdicts are mechanical at 3×SEM from parity — *energy-distinct*,
+*time-dominated*, *not demonstrated* — taken at the largest N, where harness
+dilution is smallest. The `ratio(N)` slope is reported with a standard error
+as context and decides nothing.
+
+The report shows the two arms' actual source, read from the fixtures. The
+claim is about two shapes differing by two characters, and a report that never
+shows them asks the reader to take the most important part on trust.
 
 ### `pin_baseline.sh`
 
