@@ -1,0 +1,47 @@
+{
+ "domain_sets": [
+  [
+   "core",
+   "dram",
+   "package-0",
+   "psys",
+   "uncore"
+  ]
+ ],
+ "first_row_at": "2026-10-20T22:43:00.904294+00:00",
+ "git_dirty": [
+  false
+ ],
+ "git_sha": [
+  "6fc254c45917ed459518b70c1745a79b8cc2d850"
+ ],
+ "kernels": [
+  "7.0.0-38-generic"
+ ],
+ "last_row_at": "2026-10-20T22:45:17.568766+00:00",
+ "machines": [
+  "x86_64"
+ ],
+ "pair_rules": {
+  "sum_list": [
+   "eager-materialization"
+  ]
+ },
+ "pairs": [
+  "sum_list"
+ ],
+ "pinned": [
+  true
+ ],
+ "rules": [
+  "eager-materialization"
+ ],
+ "runtimes": [
+  [
+   "3.14.4",
+   "cpython",
+   false,
+   "/usr/bin/python3"
+  ]
+ ]
+}
