@@ -293,11 +293,23 @@ def svg(summary, pair, title, subtitle):
         # series' own end-label, because a time ratio near parity IS this
         # line -- which is exactly the case the chart exists to show, so the
         # collision is the normal case rather than an edge one.
-        # One word. The de-emphasis series wobbles either side of parity by
-        # design -- that is the finding -- so any long caption on this line
-        # gets crossed by it. The subtitle already says what parity means.
-        a('<text {0} x="{1}" y="{2:.1f}">parity</text>'.format(
-            ink("muted", "ax"), x0 + 4, yp - 8))
+        # One word, at whichever END has more room. A fixed side cannot work:
+        # the series approach parity exactly where the finding is, so the
+        # crowded end is data-dependent -- left-anchoring was clear on a
+        # ladder whose ratios all sat high, and landed on top of the 50k
+        # energy marker once a real ladder dipped toward parity there.
+        # Clearance is measured in pixels against every series drawn at that
+        # end, so the choice is deterministic rather than a guess.
+        def clearance(idx):
+            vals = [d[idx][1] for d in (time_s, ps["energy"]) if d]
+            return min((abs(py(v) - yp) for v in vals), default=1e9)
+
+        if clearance(0) >= clearance(-1):
+            a('<text {0} x="{1}" y="{2:.1f}">parity</text>'.format(
+                ink("muted", "ax"), x0 + 4, yp - 8))
+        else:
+            a('<text {0} x="{1}" y="{2:.1f}" text-anchor="end">parity</text>'
+              .format(ink("muted", "ax"), x0 + plot_w - 4, yp - 8))
 
         # X axis.
         a('<line x1="{0}" y1="{1}" x2="{2}" y2="{1}" {3} stroke-width="{4}"/>'

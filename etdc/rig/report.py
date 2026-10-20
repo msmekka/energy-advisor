@@ -295,10 +295,21 @@ def coefficients(summary, facts):
         for pair, pair_entry in entry["pairs"].items():
             pts = sorted(pair_entry["points"], key=lambda p: p["n"] or 0)
             pair_entry["points"] = pts
-            # The headline is the LARGEST N. Interpreter dispatch overhead is
-            # roughly constant per iteration, so its share -- and the harness
-            # dilution with it -- shrinks as N grows. The largest N is where
-            # the memory mechanism this rule is about is least diluted.
+            # The headline is the LARGEST N, as the CONSERVATIVE point.
+            #
+            # The original reason was harness dilution: overhead is roughly
+            # constant per iteration, so its share shrinks as N grows and the
+            # largest N should show the effect least diluted. Measurement on
+            # rc-mw01 (2026-10-20) contradicted that -- decoupling DECLINED
+            # with N, 1.127 at 50k down to 1.067 at 800k, because the time
+            # ratio climbs with N while the energy ratio stays flatter. So
+            # dilution is not what dominates here.
+            #
+            # Largest N is kept, but for a different and weaker reason: it is
+            # the smallest decoupling on the ladder, so quoting it cannot
+            # overstate the result. The trend across the ladder is reported
+            # alongside it, because on this data the headline alone hides the
+            # most interesting point.
             head = pts[-1] if pts else None
             pair_entry["headline"] = {
                 "n": head["n"],
@@ -415,6 +426,40 @@ def render(summary, facts, checks, coeffs, pair, chart_rel, sources=None):
           "already said: a speed rule wearing a green hat, and not worth "
           "having as a separate rule. The threshold used is {0:.0f}×SEM from "
           "parity.".format(SIGMA))
+
+        # The headline is the most conservative point by construction, so on
+        # any ladder with a trend it is NOT the most informative one. Report
+        # the span and name the extreme, or the report buries its own finding.
+        ranked = [(p, (p.get("decoupling_sub") or p.get("decoupling_raw")))
+                  for p in points]
+        ranked = [(p, st) for p, st in ranked if st and st.get("mean")]
+        if len(ranked) > 1:
+            best, best_st = max(ranked, key=lambda ps: ps[1]["mean"])
+            worst, worst_st = min(ranked, key=lambda ps: ps[1]["mean"])
+            a("")
+            a("**Across the ladder** the decoupling runs from {0} at "
+              "N = {1:,} to {2} at N = {3:,}, and is distinguishable from "
+              "parity at every point measured. The headline above quotes the "
+              "smallest of these, so it understates the rest."
+              .format(fmt_stat(worst_st), worst["n"],
+                      fmt_stat(best_st), best["n"]))
+
+            # The case the whole project is looking for: the clock does not
+            # merely fail to see the cost, it points the other way.
+            inverted = [p for p, _ in ranked
+                        if p.get("time_ratio")
+                        and (p["time_ratio"].get("mean") or 1.0) < 1.0
+                        and distinguishable(p["time_ratio"])]
+            if inverted:
+                q = inverted[0]
+                a("")
+                a("At N = {0:,} the time ratio is **{1}** — the flagged "
+                  "shape is *faster*. Energy at the same point is {2}. "
+                  "Wall-clock does not merely fail to see this cost; it "
+                  "points the other way."
+                  .format(q["n"], fmt_stat(q["time_ratio"]),
+                          fmt_stat(q.get("energy_ratio_sub")
+                                   or q.get("energy_ratio_raw"))))
     else:
         a("No measurement points survived. See the checks below.")
     a("")
@@ -423,13 +468,22 @@ def render(summary, facts, checks, coeffs, pair, chart_rel, sources=None):
     sl = slopes.get("idle_subtracted") or slopes.get("raw")
     if sl and sl.get("slope") is not None:
         se = sl.get("se")
+        slope = sl["slope"]
+        rising = slope > 0
+        significant = se is not None and se > 0 and abs(slope) >= 2 * se
         a("Slope of the decoupling quotient against trip count: "
-          "**{0:+.3f} per decade of N**{1}. Harness dilution shrinks as N "
-          "grows, so a quotient near 1.0 that *rises* and one that stays flat "
-          "are different stories; this is reported as context and decides "
-          "nothing.".format(
-              sl["slope"],
-              " (±{0:.3f})".format(se) if se else ""))
+          "**{0:+.3f} per decade of N**{1} — the quotient {2} as N grows."
+          .format(slope, " (±{0:.3f})".format(se) if se else "",
+                  "rises" if rising else "declines" if significant
+                  else "is flat within noise"))
+        if significant and not rising:
+            a("")
+            a("That is the opposite of what harness dilution would produce. "
+              "Dilution is a roughly constant per-iteration overhead, so its "
+              "share shrinks as N grows and it pushes the quotient *up* with "
+              "N; a quotient that falls instead means something else "
+              "dominates. Here it is the time ratio: it climbs with N while "
+              "the energy ratio stays flatter, so their quotient shrinks.")
         a("")
 
     if sources and sources.get("flag") and sources.get("no-flag"):
@@ -460,6 +514,15 @@ def render(summary, facts, checks, coeffs, pair, chart_rel, sources=None):
       "the time ratio and understates whatever is there. A negative "
       "`E_active` is never clamped; it is reported as a failed check.")
     a("")
+
+    uncal_scopes = sorted({n["scope"] for n in summary.get("notes", [])
+                           if "uncalibrated" in n.get("detail", "")})
+    if uncal_scopes:
+        a("> **Caveat:** windows under the floor at {0}. Relative error scales "
+          "as (RAPL refresh period / window length), so those points are "
+          "reported but not calibrated — see the failed check below."
+          .format("; ".join(uncal_scopes)))
+        a("")
 
     a("## Method")
     a("")

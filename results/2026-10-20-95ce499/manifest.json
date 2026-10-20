@@ -1,0 +1,31 @@
+{
+ "pair": "sum_list",
+ "sweeps": [
+  {
+   "expected_python": "/usr/bin/python3",
+   "git_dirty": false,
+   "git_sha": "95ce499a6e6e368b4b66898a4587212e5a9bbaa1",
+   "ladder": [
+    50000,
+    100000,
+    200000,
+    400000,
+    800000
+   ],
+   "pair": "sum_list",
+   "parent_domains": [
+    "core",
+    "dram",
+    "package-0",
+    "psys",
+    "uncore"
+   ],
+   "pinned": true,
+   "reps": 10,
+   "rule_id": "eager-materialization",
+   "sweep_id": "2026-10-20T22:06:36.625321+00:00",
+   "warmup": 2,
+   "window_work": 14400000
+  }
+ ]
+}
