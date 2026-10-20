@@ -83,9 +83,64 @@ Run it **as the campaign user**: besides reporting what is pinned and the
 current-vs-original RAPL modes, it tells you whether *that user* can read the
 counters, which is the question that decides whether a campaign will start.
 
-### Running a measurement
+### Running the ratio(N) sweep
 
-The campaign runner does not exist yet. One run at a time does:
+The full campaign runner does not exist yet. `sweep.py` does one pair across
+the N ladder, which is what the report and the demo are built around:
+
+```sh
+cd ~/energy-advisor                        # must be the repo root
+./etdc/rig/sync.sh                         # pull-only, --ff-only, refuses a dirty tree
+
+python3 -s -m etdc.rig.sweep --dry-run     # prints the R ladder and the run count
+
+mkdir -p etdc/rig/runs
+python3 -s -m etdc.rig.sweep \
+    --rule eager-materialization --pair sum_list \
+    --out etdc/rig/runs/$(date -u +%Y%m%dT%H%M%SZ)-sum_list.jsonl
+```
+
+Defaults are N = 50k/100k/200k/400k/800k at 10 reps — 100 child runs plus 6
+idle windows, under five minutes of rig time. Start with
+`--ladder 200000 --reps 2` to confirm the path end to end before spending the
+real sweep.
+
+`sweep.py` pins itself to core 0 and each child to core 1, pins
+`PYTHONHASHSEED=0`, refuses to run against a dirty tree (`--allow-dirty`
+stamps the rows instead), and appends one flushed row at a time, so a sweep
+killed halfway keeps everything it already measured. It needs no `sudo` —
+`pin_baseline.sh` has already relaxed `energy_uj` for the session.
+
+**Do not pass `--no-pin` on the rig.** It exists so the rotation can be
+exercised on a dev Mac, where `taskset` and `sched_setaffinity` do not exist.
+It stamps `pinned: false` on every row, because an unpinned row is not a
+cheaper measurement — it is an uncalibrated one that reads exactly like a real
+one.
+
+Then read the rows, on the rig or after copying them off:
+
+```sh
+python3 -s -m etdc.rig.decouple etdc/rig/runs/*.jsonl --json /tmp/summary.json
+python3 -s -m etdc.rig.chart /tmp/summary.json --svg ratio-n.svg --table ratio-n.md
+```
+
+`decouple.py` reports raw and idle-subtracted side by side and never clamps a
+negative `E_active`, pools rows from two interpreters, or drops a failed row
+silently — failures are counted and named. Read its notes before believing the
+table: that is where a stale baseline, a short window or a dead counter
+appears.
+
+**Rows have to come back off the rig yourself.** `sync.sh` is pull-only *onto*
+the rig, so it will not carry rows the other way:
+
+```sh
+# from the dev machine
+scp rc-mw01:energy-advisor/etdc/rig/runs/*.jsonl etdc/rig/runs/
+```
+
+### Running a single measurement
+
+One run at a time, for a sanity check or a hand-measured row:
 
 ```sh
 cd ~/energy-advisor                        # must be the repo root
@@ -202,6 +257,47 @@ startup inside the measurement.
 Every row carries the interpreter it ran on. A failure is a row too, with the
 error and a traceback and **no `energy_uj` key at all** — a zero delta is
 indistinguishable from a genuinely idle window, so nothing is ever substituted.
+
+### `sweep.py`
+
+The parent half: one pair across the N ladder. Owns what the child cannot —
+ordering, R selection, the idle arm and provenance.
+
+Arms are **interleaved** (flag, no-flag, flag, …), so every ratio is formed
+from two adjacent windows and drift cancels inside the ratio instead of
+landing on whichever arm ran first. **R is derived** from the measured
+constant `R·N ≈ 1.44×10⁷` element-iterations, which held a ~1 s window at
+R = 72, N = 200,000 — so the window stays near-constant as N moves. That
+constant is specific to `rc-mw01`; re-measure it on another rig.
+
+The **idle arm** is measured here, between children, one ~1 s window per 20
+runs plus one before the first. It is in the rotation rather than captured
+once at pin time for two reasons: it makes `P_idle` a function of time, and an
+idle window taken *between* runs is the floor under campaign conditions, which
+is what is actually being subtracted. The pin-time baseline stays as the drift
+reference.
+
+N = 200,000 is on the default ladder deliberately — it is the point already
+measured at a decoupling of 1.083, so each sweep re-measures a known value.
+
+### `decouple.py`
+
+Read-only over a rows JSONL; groups by `(pair, n)`, pairs adjacent
+flag/no-flag rows and reports the three ratios per point, raw and
+idle-subtracted. Each row is subtracted against the idle window **nearest it
+in time**, not against a sweep-wide mean, so a baseline that moved mid-sweep
+shows up as a changing subtrahend instead of being averaged away.
+
+Validated off-rig against synthetic rows with a known decoupling injected: the
+subtracted column returns it exactly, and raw lands consistently below it —
+the understatement that makes the subtraction worth doing.
+
+### `chart.py`
+
+Reads a `decouple.py --json` summary and writes the `ratio(N)` SVG plus the
+Markdown table view. Deterministic by construction: same rows in, byte-identical
+chart out, so regenerating a committed report and finding an empty `git diff`
+is itself the test that the report still matches the rows beside it.
 
 ### `pin_baseline.sh`
 
