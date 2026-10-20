@@ -1,2 +1,4 @@
 measurements/
 runs/
+logs/
+*.log
