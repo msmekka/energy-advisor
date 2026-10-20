@@ -62,7 +62,7 @@ def discover_domains(root=RAPL_ROOT):
                 except OSError:
                     mode = "unknown"
                 raise type(exc)(
-                    f"{path}/energy_uj is not readable as uid {os.geteuid()} "
+                    f"{real}/energy_uj is not readable as uid {os.geteuid()} "
                     f"(mode {mode}): {exc}. RAPL counters are commonly "
                     f"root-only; run pin_baseline.sh, which relaxes them for "
                     f"the session and restores them with --restore."
@@ -72,7 +72,16 @@ def discover_domains(root=RAPL_ROOT):
             if os.path.exists(max_range_path):
                 with open(max_range_path) as f:
                     max_range = int(f.read().strip())
-            found.append((path, name, max_range))
+            # Record the REALPATH, not the path this walk happened to
+            # arrive by. /sys/class/powercap exposes each zone twice -- flat
+            # (intel-rapl:0:0) and nested (intel-rapl/intel-rapl:0/...) -- and
+            # which one is reached first depends on os.listdir order.
+            # Deduplication already keys on realpath, so the domain SET is
+            # correct either way, but recording the arrival path left the
+            # stored path varying between invocations and made the sort below
+            # order on something non-canonical -- which is what that sort
+            # exists to prevent.
+            found.append((real, name, max_range))
         for entry in entries:
             if entry.startswith("intel-rapl"):
                 child = os.path.join(path, entry)
@@ -86,8 +95,8 @@ def discover_domains(root=RAPL_ROOT):
                 if os.path.isdir(child):
                     visit(child)
 
-    # Sort by sysfs path BEFORE assigning keys, not after. listdir order isn't
-    # guaranteed, and the duplicate-name suffix below depends on visit order —
+    # Sort by CANONICAL path before assigning keys, not after. listdir order
+    # isn't guaranteed, and the duplicate-name suffix below depends on order —
     # so sorting only the iteration order would still let `core` and `core-2`
     # swap which socket they point at between invocations on a multi-socket
     # box. Path order also keeps the subzone hierarchy visible, since

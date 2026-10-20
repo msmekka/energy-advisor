@@ -29,9 +29,16 @@ tracker.
 
 ```sh
 git clone <repo-url> ~/energy-advisor      # as the campaign user, NOT root
-cd ~/energy-advisor && git checkout etdc-restructure
+cd ~/energy-advisor
 python3 -VV                                # must be 3.12+; 3.14.4 as of writing
 ```
+
+**Which branch the rig tracks.** `main` by default, which is what a fresh
+clone gives you. Checking out a feature branch to measure work in flight is
+legitimate — often it is the whole point of having a rig — but a campaign you
+intend to *promote* should cite a sha reachable from `main`, or the published
+result references code that may be rebased away or never merged. `sync.sh`
+fast-forwards whatever branch is checked out; it does not pick one for you.
 
 The checkout must be owned by the user who will run campaigns. `sudo` is for
 `pin_baseline.sh` and nothing else — a root `git pull` leaves root-owned files
@@ -82,7 +89,7 @@ The campaign runner does not exist yet. One run at a time does:
 
 ```sh
 cd ~/energy-advisor                        # must be the repo root
-PYTHONHASHSEED=0 taskset -c 3 python3 -s -m etdc.rig.harness \
+PYTHONHASHSEED=0 taskset -c 1 python3 -s -m etdc.rig.harness \
     benchmarks/eager-materialization/flag/sum_list.py \
     --n 200000 --r 500 --warmup 2 --out /tmp/run.json
 ```
@@ -95,8 +102,15 @@ Three things in that line matter:
 - **`PYTHONHASHSEED=0`.** Set construction and membership go through `hash()`,
   and the `max_set` pair exists to measure exactly that path. An unpinned seed
   injects variance into the arm under test.
-- **`taskset`** needs no root. Pinning affinity on your own process is
-  unprivileged, which is part of why the campaign needs no `sudo` at all.
+- **`taskset -c 1`, not core 3.** `rc-mw01` has 4 logical CPUs with SMT on —
+  2 physical cores, thread siblings `(0,2)` and `(1,3)` — so once
+  `pin_baseline.sh` disables SMT only `cpu0` and `cpu1` remain online and
+  `taskset -c 3` fails with `sched_setaffinity: Invalid argument`. Confirm the
+  surviving set with `cat /sys/devices/system/cpu/online` after pinning. Core 1
+  for the child leaves core 0 for the runner and everything else on the box —
+  with only two cores there is no third place to put things. `taskset` itself
+  needs no root: setting affinity on your own process is unprivileged, which is
+  part of why the campaign needs no `sudo` at all.
 
 A fixture also runs on its own, which is useful for a sanity check:
 
@@ -151,6 +165,31 @@ it silently misses `psys`/`core`/`uncore` (all of which this rig exposes).
 ```sh
 python3 rapl.py --seconds 30 --out baseline.json
 ```
+
+### Which domains count
+
+Confirmed on this rig; the decision is recorded in
+[the plan doc](../../energy-aware-code-analysis-plan.md) and is **settled, not
+open**:
+
+- `core` and `uncore` are **subzones of `package-0`**, not separate rails.
+  Adding them on top of package-0 double-counts.
+- `dram` is a genuinely separate physical rail and **does** add to the package
+  total. (Most client chips do not expose it at all; this rig does, which is
+  why memory-traffic coefficients are reachable here.)
+- `psys` is meant to be the platform-wide umbrella, but measures *lower* than
+  package-0 + dram here, which is incoherent for an umbrella metric. It is
+  **excluded, and deliberately not root-caused** — a rig-specific finding, not
+  a general RAPL fact, and chasing it has no payoff for this project.
+- `uncore` additionally reads exactly 0 on this rig, across both a 30 s and a
+  5 s window.
+
+So the **CPU-side total is `package-0` + `dram`**.
+
+Exclusion happens at analysis, never at capture: every domain stays on every
+row. You can drop a domain from a sum afterwards; you cannot recover one you
+never wrote down. Record this choice next to the rig details — CPU model,
+kernel, governor, date — wherever coefficients are published.
 
 ### `harness.py`
 

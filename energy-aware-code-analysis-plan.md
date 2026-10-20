@@ -113,6 +113,8 @@ Setup checklist:
 2. Check which domains exist. Client chips typically expose `package`, `core`, and `uncore/gfx`. **The `dram` domain is usually server-only** — a real limitation, since memory-traffic coefficients are the most interesting case. Plan to infer memory cost from tier-2 cache-miss counts rather than measure it directly. **Our rig exposes dram. We can get measurements directly**
 3. Pin the machine down. Disable turbo (`intel_pstate/no_turbo`), fix the governor with `cpupower frequency-set`, `taskset` to one core, disable the SMT sibling, stop background services, and let it thermally soak before the first sample. **Reproducibility depends far more on this than on the choice of meter** — skipping it produces variance that averaging will not fix.
 
+**Rig details, 2026-10-16** — the record this section calls for. `rc-mw01`: 4 logical CPUs / 2 physical cores, so SMT-off leaves `cpu0` and `cpu1` online and nothing else; the measured child pins to core 1 while the runner shares core 0 with the OS. Base clock locked at 2,600,000 kHz, turbo off, governor `performance`. Kernel 7.0.0-38-generic, x86_64, CPython 3.14.4 (GCC 15.2.0). Five RAPL domains: `package-0`, `core`, `uncore`, `dram`, `psys`. `energy_uj` ships at 0400 and is relaxed to 0444 for the session by `pin_baseline.sh`, restored on `--restore`, which is what keeps the measurement campaign entirely unprivileged. Idle baseline after a 600 s soak: package-0 0.420 W, dram 0.656 W, core 0.019 W, psys 0.319 W, and `uncore` **exactly zero** — a dead counter on this part, not a quiet one, which matters because a zero delta is otherwise indistinguishable from an idle window.
+
 **Domain hierarchy, confirmed empirically on this rig:** `core` and `uncore` are children of `package-0` (sysfs subzones), not separate rails — never sum them on top of package-0. `dram` is a genuinely separate physical rail (memory controller/DIMMs) and adds to, rather than replaces, the package total. `psys` — meant to be the platform-wide umbrella covering package + dram + more — measured *lower* than package-0 + dram combined here, which is physically incoherent for an umbrella metric. **Decision: CPU-side total = sum of package domains + dram; `psys` excluded, and its inconsistency is not being root-caused.** `psys` is seemingly unreliable on this rig, and chasing why is a rabbit hole with no payoff for the project's goals — an explicit call to drop it rather than debug it. Write this choice down next to the rig details (CPU model, kernel, governor, date) whenever coefficients get recorded — it's a rig-specific finding, not a general RAPL fact.
 
 ### Whole-system reference: wall power, not battery discharge
@@ -132,6 +134,56 @@ A clean validated 300 s run on this rig: Shelly ≈4.3 W wall draw at idle, RAPL
 - **Batch to clear the sampling floor.** Loop the snippet until the run exceeds the meter's resolution by a comfortable margin, then divide.
 - **Version the coefficient file and record the rig in it** — CPU model, kernel, governor settings, Python version, date. Python version matters more than it looks: 3.11's specialising interpreter moved per-operation costs meaningfully, and free-threading moves them again.
 - **Don't try to build the table.** Build the harness that would build it, and populate it for three to five patterns on one machine. A defensible general table would have to vary microarchitecture, core count, governor, memory configuration, platform idle power, workload size, thermal state, and interpreter version — thousands of runs, stale in eighteen months. That's ongoing research infrastructure, which is why no good public table exists. The absence is itself a finding worth writing up.
+
+### First measured result — 2026-10-16
+
+First measurement on real hardware. `eager-materialization`, the `sum_list`
+pair: `sum([x * x for x in data])` against `sum(x * x for x in data)`, which
+differ by two characters. N = 200,000, R = 72 (≈1 s window), six interleaved
+flag/no-flag pairs, ratio computed per adjacent pair. Raw — idle subtraction is
+designed but not yet implemented.
+
+| | mean | stdev |
+|---|---|---|
+| time ratio | 1.017 | 0.038 |
+| energy ratio (`package-0` + `dram`) | 1.101 | 0.035 |
+| **decoupling** | **1.083** | **0.012** |
+
+SEM on the decoupling quotient is ≈0.005, putting it roughly 16 standard errors
+above 1.0. The time ratio is **not** distinguishable from 1.0 — individual pairs
+land on both sides of parity (0.981 to 1.068).
+
+**So: wall-clock cannot tell these two programs apart. Energy says one costs
+about 10% more.** That is the project's thesis in its cleanest form. Not "a
+difference a profiler might dismiss as small" — a difference a profiler cannot
+see at all.
+
+Three methodological findings came with it, each arguably worth more than the
+number:
+
+1. **The window floor is real, and short windows inflate.** The same pair at
+   R = 5 — a 71 ms window — gave a decoupling of 1.21. At R = 72 it gives 1.083.
+   Too few repetitions let cold-iteration effects occupy a large fraction of the
+   measured region. The 1.21 is retired. Anything below roughly a 1 s window
+   should be treated as uncalibrated.
+2. **The decoupling quotient is better-conditioned than either ratio it is built
+   from** — stdev 0.012 against 0.038 and 0.035. Time and energy noise are
+   strongly correlated (a slow run is also a high-energy run), so the ratio of
+   ratios cancels the common mode. The unit chosen for conceptual reasons turns
+   out to be the statistically sharper one too.
+3. **Campaigns are far cheaper than assumed.** At that variance, 6–10 repetitions
+   per point give a usable standard error. Five pairs × five values of N × 10
+   repetitions × 2 arms is ~500 runs — well under half an hour of rig time. The
+   earlier working estimate of ~1200 runs over several hours predated knowing the
+   variance.
+
+Still open: idle subtraction, the `trip_count` sweep that turns this into
+`ratio(N)`, and the other four pairs. Also worth re-confirming at R = 72 is the
+domain split seen in the first (retired) R = 5 run, where `core` tracked the time
+ratio while `package − core` roughly doubled and `dram` rose ~44% — i.e. compute
+unchanged, memory path loaded. If that holds at a proper window it is direct
+evidence the instrument tracks the *claimed mechanism* rather than merely
+producing a number, which is the strongest thing a result here can do.
 
 ### Open: joules → CO2e
 
@@ -162,12 +214,17 @@ Turning a measured or estimated joule figure into a CO2e figure needs a grid car
 - ✅ Lenovo online, powercap verified
 - ✅ Pinning script written, including idle baseline capture (`pin_baseline.sh`)
 - ✅ RAPL vs Shelly wall-power cross-validation (`validate_shelly.py`, `validate_baseline.py`) — see "Whole-system reference: wall power, not battery discharge" above for the coverage-ratio sanity check and the quantization-noise fix
-- Harness: warmup, N repetitions, outlier handling, results to versioned JSON — baseline capture/subtraction itself is done; the repeated-snippet harness around it is not yet built
+- ✅ `start`/`stop` counter bracketing (`rapl.py`), so a workload can be measured rather than only a window sampled
+- ✅ Per-run harness (`harness.py`): one fixture, one measured window, one JSON row, interpreter recorded on every row, failures recorded as rows
+- ✅ Benchmark corpus (`benchmarks/`): five flag/no-flag pairs plus a documented contract
+- ✅ Whole path validated on hardware 2026-10-16 — pin, relax, verify-as-campaign-user, measure unprivileged, restore
+- Campaign runner (interleaving, manifest, provenance, JSONL append) — not built; a throwaway loop produced the first result
+- Idle subtraction — decided (analysis-time, per domain, never clamped) but not implemented
 - Validate the harness against something known before trusting it — a `sleep` loop versus a spin loop should show a large, predictable difference.
 
 ### Phase 3 — Coefficients
 
-- Before/after pairs for three to five patterns, across two or three input sizes.
+- Before/after pairs for three to five patterns, across two or three input sizes. Measured variance (see "First measured result") puts this at ~500 runs and under half an hour of rig time, not the multi-hour campaign originally assumed.
 - Emit ratios with confidence intervals into the coefficient file, tagged with the rig description.
 - Wire the CLI to read it. Findings now carry magnitude, clearly labelled as estimated from that table.
 
