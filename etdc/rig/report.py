@@ -687,10 +687,22 @@ def main():
     # Rows verbatim. Concatenated rather than re-serialised, so the archived
     # bytes are the measured bytes -- re-dumping through json would silently
     # normalise float formatting and key order.
-    with open(os.path.join(dest, "rows.jsonl"), "w") as out:
+    #
+    # Written through a temp file and then renamed, because the destination is
+    # very often ALSO a source: regenerating a promoted campaign in place --
+    # `report.py results/X/rows.jsonl --out results/`, the command this
+    # report's own header prints, and the way the empty-git-diff property is
+    # tested -- makes src and dest the same path. Opening the destination "w"
+    # first truncated it to zero bytes before the read, destroying the very
+    # rows being promoted. Reading every source before anything is replaced
+    # makes the self-referential case correct rather than merely refused.
+    rows_path = os.path.join(dest, "rows.jsonl")
+    tmp_path = rows_path + ".tmp"
+    with open(tmp_path, "w") as out:
         for path in args.rows:
             with open(path) as f:
                 shutil.copyfileobj(f, out)
+    os.replace(tmp_path, rows_path)
 
     chart_rel = os.path.join("charts", "ratio-n.svg")
     with open(os.path.join(dest, chart_rel), "w") as f:
