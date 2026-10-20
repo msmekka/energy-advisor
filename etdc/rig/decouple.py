@@ -311,8 +311,17 @@ def stats(values):
 
 def summarise(rows, domains=ENERGY_DOMAINS, window_floor=WINDOW_FLOOR_S):
     idle_rows = [r for r in rows if r.get("arm") == "idle"]
-    measured = [r for r in rows if r.get("arm") in MEASURED_ARMS]
-    problems = [r for r in rows if r.get("status") != "ok"]
+    # Probe rows are real measurements, deliberately taken at a short window to
+    # size R. They are kept in the file -- nothing is ever dropped -- but must
+    # not enter a ratio: their window is below the floor by construction, and
+    # pairing one against a calibrated window would compare two different
+    # measurements and call it an effect.
+    probes = [r for r in rows if r.get("probe")]
+    measured = [r for r in rows
+                if r.get("arm") in MEASURED_ARMS and not r.get("probe")]
+    problems = [r for r in rows
+                if r.get("status") != "ok" and not r.get("probe")]
+    probe_problems = [r for r in probes if r.get("status") != "ok"]
     idle_samples = idle_power(idle_rows)
 
     ok = [r for r in measured if r.get("status") == "ok"]
@@ -366,6 +375,8 @@ def summarise(rows, domains=ENERGY_DOMAINS, window_floor=WINDOW_FLOOR_S):
         "window_floor_s": window_floor,
         "rows": len(rows),
         "measured_rows": len(measured),
+        "probe_rows": len(probes),
+        "probe_failures": len(probe_problems),
         "idle_rows": len(idle_rows),
         "idle_usable": len(idle_samples),
         "problem_rows": [
@@ -403,9 +414,14 @@ def report(summary, verbose=False):
     out = []
     d = ", ".join(summary["domains"])
     out.append(f"domains: {d}    window floor: {summary['window_floor_s']:.1f}s")
-    out.append(f"rows: {summary['rows']}  measured: {summary['measured_rows']}  "
-               f"idle: {summary['idle_rows']} ({summary['idle_usable']} usable)  "
-               f"problem: {len(summary['problem_rows'])}")
+    line = (f"rows: {summary['rows']}  measured: {summary['measured_rows']}  "
+            f"idle: {summary['idle_rows']} ({summary['idle_usable']} usable)  "
+            f"problem: {len(summary['problem_rows'])}")
+    if summary.get("probe_rows"):
+        line += (f"  probe: {summary['probe_rows']}"
+                 + (f" ({summary['probe_failures']} failed)"
+                    if summary.get("probe_failures") else ""))
+    out.append(line)
 
     if summary["idle_power_w"]:
         parts, drifted = [], []

@@ -61,6 +61,7 @@ Both panels share a y-axis. The idle-subtracted panel removes `P_idle × duratio
 
 - **Energy domains:** `package-0 + dram`. `core`/`uncore` are subzones of `package-0`, so summing them would double-count; `psys` is excluded because it reads below `package-0 + dram` on this rig. All domains are recorded on every row regardless — a domain can be dropped from a sum later, but cannot be recovered if it was never captured.
 - **Window floor:** 1.0 s. Relative error is roughly (RAPL refresh period / window length) and a ratio of ratios compounds it.
+- **R calibration: none.** R came from a fixed `R·N` constant calibrated at one trip count. That assumes cost per element is constant across N; it is not, because the working set outgrows cache, so windows at the ends of the ladder drift away from the target. This campaign predates per-`(arm, N)` calibration — see the window-floor check below.
 - **Interleaved arms.** Every ratio is formed from two adjacent windows, so drift between repetitions cancels inside the ratio instead of landing entirely on whichever arm ran first.
 - **Per repetition.** Ratios divide by R, so R may differ between arms without affecting the comparison.
 - **Statistic:** mean ±SEM over the adjacent-pair ratios. The decoupling quotient is better-conditioned than either ratio it is built from, because time and energy noise are correlated and the common mode cancels.

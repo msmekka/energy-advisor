@@ -53,9 +53,27 @@ from etdc.rig import rapl
 # needed: ratios are formed from E/R, and harness overhead enters as
 # E/R = w + h regardless of R.
 #
-# This constant is specific to rc-mw01. Re-measure it on another rig: run one
-# arm at a known N, and scale.
+# This constant is specific to rc-mw01. It is now only a SEED for the probe
+# below, not the thing that sets R.
+#
+# Why it stopped being enough (measured 2026-10-20, results/2026-10-20-95ce499):
+# R*N assumes cost per element is constant across N. It is not. Per-element
+# cost rose from 50.8 ns at N=50,000 to 76.4 ns at N=800,000 as the working
+# set outgrew cache -- the very memory effect this rule is about. Calibrated
+# at 200,000 the constant nails that point (0.989 s) and undershoots badly at
+# the ends: 0.732 s at 50,000, under the 1.0 s floor. The most interesting
+# point on that ladder was also the uncalibrated one.
 WINDOW_WORK = 72 * 200_000
+
+# What a calibrated window aims for. Slightly above the 1.0 s floor rather than
+# at it: R is an integer and the window jitters, so targeting the floor exactly
+# puts about half the windows under it.
+TARGET_WINDOW_S = 1.15
+
+# The probe runs at this fraction of the seed R -- long enough to measure a
+# per-repetition cost, short enough to be nearly free. Ten probes (five N, two
+# arms) cost a couple of seconds against a sweep of ~2 minutes.
+PROBE_FRACTION = 0.15
 
 # Weighted toward large N deliberately. Interpreter dispatch overhead is
 # roughly constant per iteration, so its share shrinks as N grows, while the
@@ -213,19 +231,35 @@ def measure_idle(domains, seconds):
     return row
 
 
-def rotation(ladder, reps, window_work):
-    """Yield (n, r, arm) in the order they will be measured.
+def calibrate(run, n, window_work, target):
+    """Measure this (arm, N)'s per-repetition cost, then pick R from it.
 
-    Flag and no-flag alternate within each N, so every ratio comes from two
-    adjacent windows. N is held for a whole block rather than interleaved too:
-    switching N means rebuilding data, and a ratio is only ever formed within
-    one N, so there is nothing for interleaving N to cancel.
+    Returns (r, probe_row). `run` is a callable taking R, so this does not
+    need to know how a child is spawned.
+
+    Per ARM as well as per N. The arms of a pair can differ enormously --
+    any_list's no-flag arm is ~57x faster, so one shared R would give the flag
+    arm a ~57 s window and cost hours for one pair. Nothing is lost by letting
+    them differ: ratios are formed from E/R and T/R, and harness overhead
+    enters as E/R = w + h regardless of R.
+
+    A failed probe falls back to the seed constant rather than aborting. A
+    campaign with one badly-sized window is worth more than no campaign, and
+    the window length is recorded on every row, so decouple.py flags it.
     """
-    for n in ladder:
-        r = r_for(n, window_work)
-        for _ in range(reps):
-            yield n, r, "flag"
-            yield n, r, "no-flag"
+    r_probe = max(1, round(r_for(n, window_work) * PROBE_FRACTION))
+    row = run(r_probe)
+    row["probe"] = True
+
+    duration = row.get("duration_s")
+    if row.get("status") != "ok" or not duration or duration <= 0:
+        row["r_source"] = "seed (probe failed)"
+        return r_for(n, window_work), row
+
+    per_rep = duration / r_probe
+    row["r_source"] = "probe"
+    row["probe_per_rep_s"] = per_rep
+    return max(1, round(target / per_rep)), row
 
 
 def main():
@@ -239,7 +273,13 @@ def main():
                         help="flag/no-flag ratio pairs per trip count")
     parser.add_argument("--warmup", type=int, default=2)
     parser.add_argument("--window-work", type=int, default=WINDOW_WORK,
-                        help="R*N product holding the target window; rig-specific")
+                        help="seed R*N product for the calibration probe; "
+                             "with --no-calibrate, it sets R outright")
+    parser.add_argument("--target-window", type=float, default=TARGET_WINDOW_S,
+                        help="window length each arm is calibrated to")
+    parser.add_argument("--no-calibrate", action="store_true",
+                        help="derive R from --window-work alone, the pre-"
+                             "2026-10-21 behaviour; reproduces older campaigns")
     parser.add_argument("--idle-every", type=int, default=IDLE_EVERY)
     parser.add_argument("--idle-seconds", type=float, default=1.0)
     parser.add_argument("--timeout", type=float, default=120.0,
@@ -275,15 +315,26 @@ def main():
         if not os.path.exists(path):
             parser.error(f"no {arm} fixture at {path}")
 
-    plan = list(rotation(ladder, args.reps, args.window_work))
+    children = len(ladder) * args.reps * 2
 
     if args.dry_run:
-        print(f"pair={args.rule}/{args.pair}  reps={args.reps}  "
-              f"window_work={args.window_work}")
+        mode = ("fixed R*N (--no-calibrate)" if args.no_calibrate
+                else f"calibrated per (arm, N) to {args.target_window:.2f}s")
+        print(f"pair={args.rule}/{args.pair}  reps={args.reps}  R: {mode}")
         for n in ladder:
-            print(f"  N={n:>9,}  R={r_for(n, args.window_work):>5}")
-        idles = 1 + len(plan) // max(1, args.idle_every)
-        print(f"{len(plan)} child runs + {idles} idle windows")
+            seed = r_for(n, args.window_work)
+            if args.no_calibrate:
+                print(f"  N={n:>9,}  R={seed:>5}")
+            else:
+                print(f"  N={n:>9,}  seed R={seed:>5}  "
+                      f"probe R={max(1, round(seed * PROBE_FRACTION)):>4}  "
+                      f"(final R measured at run time)")
+        # An idle window fires BEFORE a child when the counter is due, so the
+        # last block never gets a trailing one -- hence children // every, not
+        # one more. The old estimate said 6 where 5 were written.
+        idles = 1 + (children - 1) // max(1, args.idle_every)
+        probes = 0 if args.no_calibrate else len(ladder) * 2
+        print(f"{children} child runs + {probes} probes + {idles} idle windows")
         return 0
 
     prov = git_provenance(repo_root)
@@ -330,6 +381,11 @@ def main():
         "reps": args.reps,
         "warmup": args.warmup,
         "window_work": args.window_work,
+        # How R was chosen, recorded so a campaign is readable years later.
+        # Absence of this key means a campaign from before calibration
+        # existed, when R came from the fixed R*N constant alone.
+        "r_policy": "fixed" if args.no_calibrate else "calibrated",
+        "target_window_s": None if args.no_calibrate else args.target_window,
         "ladder": ladder,
         "expected_python": args.python,
         "pinned": not args.no_pin,
@@ -356,16 +412,38 @@ def main():
         else:
             print(line)
 
+    def child(arm, n, r):
+        return run_child(args.python, repo_root, fixtures[arm], n, r,
+                         args.warmup, args.rapl_root, args.timeout,
+                         pin=not args.no_pin)
+
     t0 = time.monotonic()
     try:
-        for n, r, arm in plan:
-            if since_idle >= args.idle_every:
-                emit(measure_idle(domains, args.idle_seconds))
-                since_idle = 0
-            emit(run_child(args.python, repo_root, fixtures[arm], n, r,
-                           args.warmup, args.rapl_root, args.timeout,
-                           pin=not args.no_pin))
-            since_idle += 1
+        for n in ladder:
+            # Calibrate both arms before measuring either, so the whole block
+            # for this N runs at its settled R and no ratio is ever formed
+            # from one calibrated and one seeded window.
+            r_by_arm = {}
+            for arm in ("flag", "no-flag"):
+                if args.no_calibrate:
+                    r_by_arm[arm] = r_for(n, args.window_work)
+                    continue
+                r, probe_row = calibrate(
+                    lambda rr, a=arm: child(a, n, rr),
+                    n, args.window_work, args.target_window)
+                r_by_arm[arm] = r
+                emit(probe_row)
+                sys.stderr.write(
+                    f"  N={n:>9,} {arm:>8}  R={r:<6} "
+                    f"(probe {probe_row.get('duration_s', 0):.3f}s)\n")
+
+            for _ in range(args.reps):
+                for arm in ("flag", "no-flag"):
+                    if since_idle >= args.idle_every:
+                        emit(measure_idle(domains, args.idle_seconds))
+                        since_idle = 0
+                    emit(child(arm, n, r_by_arm[arm]))
+                    since_idle += 1
     except KeyboardInterrupt:
         sys.stderr.write(f"\ninterrupted after {seq} rows\n")
     finally:

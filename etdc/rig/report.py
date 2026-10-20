@@ -535,6 +535,26 @@ def render(summary, facts, checks, coeffs, pair, chart_rel, sources=None):
     a("- **Window floor:** {0:.1f} s. Relative error is roughly (RAPL refresh "
       "period / window length) and a ratio of ratios compounds it."
       .format(summary.get("window_floor_s", 1.0)))
+
+    # How R was chosen is a property of the campaign, not of the reader, so it
+    # belongs in the report rather than in someone's memory of which week it
+    # was run. Campaigns predating calibration carry no r_policy key at all.
+    policies = sorted({sw.get("r_policy") or "fixed-constant"
+                       for sw in facts["sweeps"]}) or ["unknown"]
+    if policies == ["calibrated"]:
+        targets = sorted({sw.get("target_window_s")
+                          for sw in facts["sweeps"] if sw.get("target_window_s")})
+        a("- **R calibration:** each `(arm, N)` was probed and R scaled to a "
+          "{0} window. Per arm as well as per N, since the arms of a pair can "
+          "differ enormously in speed and ratios divide by R anyway."
+          .format(" / ".join("{0:.2f} s".format(t) for t in targets) or "target"))
+    elif "fixed-constant" in policies:
+        a("- **R calibration: none.** R came from a fixed `R·N` constant "
+          "calibrated at one trip count. That assumes cost per element is "
+          "constant across N; it is not, because the working set outgrows "
+          "cache, so windows at the ends of the ladder drift away from the "
+          "target. This campaign predates per-`(arm, N)` calibration — see "
+          "the window-floor check below.")
     a("- **Interleaved arms.** Every ratio is formed from two adjacent "
       "windows, so drift between repetitions cancels inside the ratio instead "
       "of landing entirely on whichever arm ran first.")
@@ -611,8 +631,10 @@ def render(summary, facts, checks, coeffs, pair, chart_rel, sources=None):
         ", ".join(facts["machines"]) or "—"))
     a("| RAPL domains seen | {0} |".format(
         " | ".join(", ".join(d) for d in facts["domain_sets"]) or "—"))
-    a("| rows | {0} measured, {1} idle, {2} failed |".format(
+    a("| rows | {0} measured, {1} idle, {2}{3} failed |".format(
         summary.get("measured_rows", 0), summary.get("idle_rows", 0),
+        "{0} probe, ".format(summary["probe_rows"])
+        if summary.get("probe_rows") else "",
         len(problems)))
     a("| measured | {0} → {1} |".format(
         facts.get("first_row_at") or "—", facts.get("last_row_at") or "—"))

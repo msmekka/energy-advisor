@@ -100,10 +100,10 @@ python3 -s -m etdc.rig.sweep \
     --out etdc/rig/runs/$(date -u +%Y%m%dT%H%M%SZ)-sum_list.jsonl
 ```
 
-Defaults are N = 50k/100k/200k/400k/800k at 10 reps — 100 child runs plus 6
-idle windows, under five minutes of rig time. Start with
-`--ladder 200000 --reps 2` to confirm the path end to end before spending the
-real sweep.
+Defaults are N = 50k/100k/200k/400k/800k at 10 reps — 100 child runs, 10
+calibration probes and 5 idle windows, a few minutes of rig time. `--dry-run`
+prints the exact counts. Start with `--ladder 200000 --reps 2` to confirm the
+path end to end before spending the real sweep.
 
 `sweep.py` pins itself to core 0 and each child to core 1, pins
 `PYTHONHASHSEED=0`, refuses to run against a dirty tree (`--allow-dirty`
@@ -293,10 +293,29 @@ ordering, R selection, the idle arm and provenance.
 
 Arms are **interleaved** (flag, no-flag, flag, …), so every ratio is formed
 from two adjacent windows and drift cancels inside the ratio instead of
-landing on whichever arm ran first. **R is derived** from the measured
-constant `R·N ≈ 1.44×10⁷` element-iterations, which held a ~1 s window at
-R = 72, N = 200,000 — so the window stays near-constant as N moves. That
-constant is specific to `rc-mw01`; re-measure it on another rig.
+landing on whichever arm ran first.
+
+**R is calibrated per `(arm, N)`.** Before each block, a short probe measures
+that arm's per-repetition cost at that trip count and R is scaled to hit
+`--target-window` (1.15 s by default — above the 1 s floor, not at it, since R
+is an integer and windows jitter). Probe rows are written to the JSONL tagged
+`probe: true`; `decouple.py` keeps them in the row count and excludes them
+from ratios, because their window is short by construction.
+
+Per **arm** as well as per N, for two reasons. The arms of a pair can differ
+enormously — `any_list`'s no-flag arm is ~57× faster, so one shared R would
+give the flag arm a ~57 s window — and nothing is lost by letting them differ,
+since ratios are formed from `E/R` and `T/R`.
+
+This replaced a fixed `R·N ≈ 1.44×10⁷` constant calibrated at N = 200,000.
+That constant assumed cost per element is constant across N. It is not:
+measured on `rc-mw01`, per-element cost rose from 50.8 ns at N = 50,000 to
+76.4 ns at N = 800,000 as the working set outgrew cache, so the constant nailed
+200,000 and undershot the small end — 0.732 s against a 1 s floor. See
+`results/2026-10-20-95ce499/README.md`, the campaign that found it.
+
+`--no-calibrate` reverts to the fixed constant, for reproducing campaigns
+measured before this existed.
 
 The **idle arm** is measured here, between children, one ~1 s window per 20
 runs plus one before the first. It is in the rotation rather than captured
