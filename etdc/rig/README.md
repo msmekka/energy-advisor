@@ -312,7 +312,7 @@ That constant assumed cost per element is constant across N. It is not:
 measured on `rc-mw01`, per-element cost rose from 50.8 ns at N = 50,000 to
 76.4 ns at N = 800,000 as the working set outgrew cache, so the constant nailed
 200,000 and undershot the small end — 0.732 s against a 1 s floor. See
-`results/2026-10-20-95ce499/README.md`, the campaign that found it.
+`results/2026-10-20-95ce499-sum_list/README.md`, the campaign that found it.
 
 `--no-calibrate` reverts to the fixed constant, for reproducing campaigns
 measured before this existed.

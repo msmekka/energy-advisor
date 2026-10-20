@@ -29,6 +29,7 @@ import argparse
 import json
 import math
 import os
+import re
 import shutil
 import statistics
 import sys
@@ -683,14 +684,39 @@ def main():
     checks = promotion_checks(rows, summary, facts)
     coeffs = coefficients(summary, facts)
 
-    # The directory name comes from the DATA: the first row's own date and the
-    # SHA the rows were measured at. Using today's date would make the same
-    # campaign promote to a different path tomorrow, and the point of the
-    # name is to identify the measurement, not the act of filing it.
+    # The directory name comes from the DATA: the first row's own date, the SHA
+    # the rows were measured at, and the PAIR. Using today's date would make
+    # the same campaign promote to a different path tomorrow, and the point of
+    # the name is to identify the measurement, not the act of filing it.
+    #
+    # The pair is in the name because date+sha is NOT unique. The efficient way
+    # to run a campaign is to pin once and sweep every pair at one commit on
+    # one day -- which gives every one of them the same date and sha. Without
+    # the pair, the second promotion silently overwrote the first and left one
+    # survivor.
     date = (facts.get("first_row_at") or "unknown")[:10]
     sha = facts["git_sha"][0][:7] if facts["git_sha"] else "nosha"
-    name = args.name or "{0}-{1}".format(date, sha)
+    safe_pair = re.sub(r"[^A-Za-z0-9._-]+", "-", str(pair))
+    name = args.name or "{0}-{1}-{2}".format(date, sha, safe_pair)
     dest = os.path.join(args.out, name)
+
+    # Defence in depth, for the case the name was forced with --name. Promoting
+    # a campaign on top of a DIFFERENT pair's campaign destroys it; promoting
+    # on top of the same pair is the ordinary re-promotion that the
+    # empty-git-diff check depends on, so only a pair mismatch is refused.
+    existing = os.path.join(dest, "manifest.json")
+    if os.path.exists(existing):
+        try:
+            with open(existing) as f:
+                was = json.load(f).get("pair")
+        except (OSError, ValueError):
+            was = None
+        if was and was != pair:
+            sys.stderr.write(
+                "refusing to promote: {0} already holds the '{1}' campaign "
+                "and this is '{2}'. Writing here would destroy it. Choose a "
+                "different --name.\n".format(dest, was, pair))
+            return 2
 
     failed = [c for c in checks if not c["ok"]]
     for c in checks:

@@ -1,11 +1,11 @@
-# 2026-10-20-6fc254c — the calibrated ratio(N) campaign
+# 2026-10-20-6fc254c-sum_list — the calibrated ratio(N) campaign
 
 Hand-written note. `report.md` beside it is **generated** and regenerating it
 must leave an empty `git diff`, so standing context lives here instead.
 
 **This is the campaign to cite.** All ten promotion checks pass; it was
 promoted without `--anyway`. It supersedes
-[`../2026-10-20-95ce499/`](../2026-10-20-95ce499/README.md), which is kept
+[`../2026-10-20-95ce499-sum_list/`](../2026-10-20-95ce499-sum_list/README.md), which is kept
 because it is the run that found the calibration defect.
 
 ## What differs from the first campaign

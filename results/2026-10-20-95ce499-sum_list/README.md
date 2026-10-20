@@ -1,6 +1,6 @@
-# 2026-10-20-95ce499 — the first ratio(N) campaign
+# 2026-10-20-95ce499-sum_list — the first ratio(N) campaign
 
-> **Superseded for citation by [`../2026-10-20-6fc254c/`](../2026-10-20-6fc254c/README.md)**,
+> **Superseded for citation by [`../2026-10-20-6fc254c-sum_list/`](../2026-10-20-6fc254c-sum_list/README.md)**,
 > the calibrated re-run on the same pin session 37 minutes later, which passes
 > every promotion check. This campaign is kept because it is the run that found
 > the defect, and because it is the control that shows calibration changed
